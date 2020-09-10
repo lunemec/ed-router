@@ -16,8 +16,8 @@ import (
 
 const (
 	systemNameFrom   = "Shinrarta Dezhra"
-	systemNameTo     = "Colonia"
-	shipJumpRange    = 67.37 // Should we use Laden or Max? TODO calculate fuel consumption
+	systemNameTo     = "Sol"
+	shipJumpRange    = 10 //67.37 // Should we use Laden or Max? TODO calculate fuel consumption
 	edsmDumpFilePath = "systemsWithCoordinates.json"
 )
 
@@ -67,11 +67,17 @@ func run() error {
 	if end == nil {
 		return errors.Errorf("Target system %s not found.", systemNameTo)
 	}
+	totalDistance := distance(start.Coordinates, end.Coordinates)
+	if totalDistance <= shipJumpRange {
+		fmt.Printf("System is within range. \n")
+		return nil
+	}
+
 	fmt.Printf(`
 Start: %s at %+v
 End: %s at %+v
 Distance: %f
-`, start.Name, start.Coordinates, end.Name, end.Coordinates, distance(start.Coordinates, end.Coordinates))
+`, start.Name, start.Coordinates, end.Name, end.Coordinates, totalDistance)
 
 	// Find all systems that lie within cylinder between
 	// start and end systems, having radius cylinderFilterRadius.
@@ -90,7 +96,8 @@ Distance: %f
 	fmt.Printf("Searching for path.\n")
 	path, distance, found := astar.Path(start, end)
 	if !found {
-		return errors.New("no viable path found")
+		fmt.Printf("No viable path found. \n")
+		return nil
 	}
 	fmt.Printf(`
 Path found.

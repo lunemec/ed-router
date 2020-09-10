@@ -1,13 +1,15 @@
 package main
 
 import (
-	"fmt"
+	"math"
 	"sync"
 
 	"github.com/beefsack/go-astar"
 	"github.com/panjf2000/ants/v2"
 	"gonum.org/v1/gonum/spatial/r3"
 )
+
+const maxCost = math.MaxFloat64
 
 type system struct {
 	//ID          int    `json:"id,omitempty"`
@@ -19,6 +21,7 @@ type system struct {
 
 func (c *system) PathNeighbors() []astar.Pather {
 	var (
+		workers   = 32
 		neighbors []astar.Pather
 		shipRange = shipJumpRange * c.ChargeMultiplier()
 
@@ -27,10 +30,11 @@ func (c *system) PathNeighbors() []astar.Pather {
 		wg sync.WaitGroup
 	)
 
-	pool, err := ants.NewPool(16)
+	pool, err := ants.NewPool(workers)
 	if err != nil {
 		panic(err)
 	}
+	defer pool.Release()
 
 	wg.Add(len(c.systems))
 	go func() {
@@ -57,14 +61,17 @@ func (c *system) PathNeighbors() []astar.Pather {
 	for neighbor := range neighborsChan {
 		neighbors = append(neighbors, neighbor)
 	}
-	fmt.Printf("%s: %d neighbors \n", c.Name, len(neighbors))
 	return neighbors
 }
 
 func (c *system) PathNeighborCost(to astar.Pather) float64 {
 	shipRange := shipJumpRange * c.ChargeMultiplier()
+	distance := distance(c.Coordinates, to.(*system).Coordinates)
+	if distance > shipRange {
+		return maxCost
+	}
 	// Prefer longer jumps over shorter.
-	cost := shipRange / distance(c.Coordinates, to.(*system).Coordinates)
+	cost := shipRange / distance
 	// TODO cost function, fuel, star type, prefer neutrons, etc.
 	return cost
 }
