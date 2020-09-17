@@ -1,6 +1,8 @@
 package pather
 
 import (
+	"fmt"
+
 	"github.com/lunemec/ed-router/pkg/distance"
 
 	"github.com/beefsack/go-astar"
@@ -41,15 +43,17 @@ func (s *System) PathNeighbors() []astar.Pather {
 
 	systemsInRange, err := s.pather.systemsInRangeOf(s, maxRange)
 	if err != nil {
-		panic(err)
+		fmt.Printf("ERROR: %+v \n", err)
+		return neighbors
 	}
 
 	for _, otherSystem := range systemsInRange {
 		if s.ID64 == otherSystem.ID64 {
 			continue
 		}
-		if distance.Distance(s.Coordinates, otherSystem.Coordinates) <= maxRange {
-			otherSystem.ship = s.ship.JumpTo() // TODO
+		dist := distance.Distance(s.Coordinates, otherSystem.Coordinates)
+		if dist <= maxRange {
+			otherSystem.ship = s.ship.Jump(dist) // TODO
 			s.leadsTo = append(s.leadsTo, Jump{
 				from: s,
 				to:   otherSystem,

@@ -46,16 +46,20 @@ func New(store SystemsStore, fromName, toName string) (Pather, error) {
 		store:   store,
 	}
 
+	ship := NewShip(72.52, 32, 878, linearConstant["A"], powerConstant[5], true)
+
 	from, err := p.systemByName(fromName)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to find system FROM: %s", fromName)
 	}
+	from.ship = ship
 	p.from = from
 
 	to, err := p.systemByName(toName)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to find system TO: %s", toName)
 	}
+	to.ship = ship
 	p.to = to
 	p.distance = distance.Distance(from.Coordinates, to.Coordinates)
 
