@@ -1,6 +1,8 @@
 package astar
 
-import "container/heap"
+import (
+	"container/heap"
+)
 
 // astar is an A* pathfinding implementation.
 
@@ -43,10 +45,13 @@ func (nm nodeMap) get(p Pather) *node {
 	return n
 }
 
+type CleanFunc func(Pather)
+
 // Path calculates a short path and the distance between the two Pather nodes.
 //
 // If no path is found, found will be false.
-func Path(from, to Pather) (path []Pather, distance float64, found bool) {
+
+func Path(from, to Pather, cleanup CleanFunc) (path []Pather, distance float64, found bool) {
 	nm := nodeMap{}
 	nq := &priorityQueue{}
 	heap.Init(nq)
@@ -79,6 +84,7 @@ func Path(from, to Pather) (path []Pather, distance float64, found bool) {
 			if cost < neighborNode.cost {
 				if neighborNode.open {
 					heap.Remove(nq, neighborNode.index)
+					cleanup(neighborNode.pather)
 				}
 				neighborNode.open = false
 				neighborNode.closed = false

@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/lunemec/ed-router/pkg/distance"
+	"github.com/lunemec/ed-router/pkg/ship"
 
 	"github.com/beefsack/go-astar"
 	"github.com/pkg/errors"
@@ -40,13 +41,11 @@ type pather struct {
 	distance float64
 }
 
-func New(store SystemsStore, fromName, toName string) (Pather, error) {
+func New(store SystemsStore, ship ship.Ship, fromName, toName string) (Pather, error) {
 	var p = pather{
 		systems: make(map[int64]*System),
 		store:   store,
 	}
-
-	ship := NewShip(72.52, 32, 878, linearConstant["A"], powerConstant[5], true)
 
 	from, err := p.systemByName(fromName)
 	if err != nil {
@@ -79,7 +78,7 @@ func (p *pather) Distance() float64 {
 }
 
 func (p *pather) Path() ([]*System, float64, bool) {
-	path, cost, found := astar.Path(p.from, p.to)
+	path, cost, found := astar.Path(p.from, p.to, p.cleanup)
 	if !found {
 		return nil, 0, false
 	}
@@ -88,6 +87,11 @@ func (p *pather) Path() ([]*System, float64, bool) {
 		systems = append(systems, path[i].(*System))
 	}
 	return systems, cost, true
+}
+
+func (p *pather) cleanup(node astar.Pather) {
+	system := node.(*System)
+	delete(p.systems, system.ID64)
 }
 
 func (p *pather) systemByID64(id64 int64) (*System, error) {

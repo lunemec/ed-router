@@ -65,22 +65,25 @@ VALUES
 	%s;
 `
 	selectByID64SQL = `
-SELECT systems.id64, systems.name, systems.x, systems.y, systems.z, 
-	bodies.id64, bodies.name, bodies.sub_type, bodies.distance_to_arrival 
-FROM 
-	systems 
-JOIN bodies 
-	ON bodies.system_id64 = systems.id64 
-WHERE 
+SELECT
+	systems.id64, systems.name, systems.x, systems.y, systems.z
+FROM
+	systems
+WHERE
 	systems.id64=?
 `
+	selectBodiesBySystemID64SQL = `
+SELECT 
+	bodies.id64, bodies.name, bodies.sub_type, bodies.distance_to_arrival
+FROM
+	bodies
+WHERE
+	bodies.system_id64=?
+`
 	selectByNameSQL = `
-SELECT systems.id64, systems.name, systems.x, systems.y, systems.z, 
-	   bodies.id64, bodies.name, bodies.sub_type, bodies.distance_to_arrival 
+SELECT systems.id64, systems.name, systems.x, systems.y, systems.z
 FROM 
-	systems 
-JOIN bodies 
-	ON bodies.system_id64 = systems.id64 
+	systems
 WHERE 
 	systems.name=? 
 COLLATE NOCASE
@@ -189,30 +192,40 @@ func (db *sqliteDB) insertBodies(tx *sql.Tx, s *dumpModels.System) error {
 }
 
 func (db *sqliteDB) SystemByID64(id64 int64) (*pather.System, error) {
-	rows, err := db.db.Query(selectByID64SQL, id64)
-	defer rows.Close()
+	rows := db.db.QueryRow(selectByID64SQL, id64)
+	err := rows.Err()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to select system by name")
 	}
 
-	s, err := db.scanToModel(rows)
+	s, err := db.scanSystemToModel(rows)
 	if err != nil {
 		return nil, err
 	}
+	stars, err := db.SystemStars(s.ID64)
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting system stars")
+	}
+	s.Stars = stars
 	return s, nil
 }
 
 func (db *sqliteDB) SystemByName(name string) (*pather.System, error) {
-	rows, err := db.db.Query(selectByNameSQL, name)
-	defer rows.Close()
+	rows := db.db.QueryRow(selectByNameSQL, name)
+	err := rows.Err()
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to select system by name")
 	}
 
-	s, err := db.scanToModel(rows)
+	s, err := db.scanSystemToModel(rows)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unable to scan to model")
 	}
+	stars, err := db.SystemStars(s.ID64)
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting system stars")
+	}
+	s.Stars = stars
 	return s, nil
 }
 
@@ -240,19 +253,45 @@ func (db *sqliteDB) SystemID64sAround(point r3.Vec, distance float64) ([]int64, 
 	return systemID64s, nil
 }
 
-func (db *sqliteDB) scanToModel(rows *sql.Rows) (*pather.System, error) {
+func (db *sqliteDB) SystemStars(systemID64 int64) ([]pather.Star, error) {
+	rows, err := db.db.Query(selectBodiesBySystemID64SQL, systemID64)
+	defer rows.Close()
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to select bodies by system_id64")
+	}
+	stars, err := db.scanBodiesToModel(rows)
+	if err != nil {
+		return nil, errors.Wrap(err, "error scanning to model")
+	}
+	return stars, nil
+}
+
+func (db *sqliteDB) scanSystemToModel(row *sql.Row) (*pather.System, error) {
 	var (
 		err    error
 		system pather.System
 	)
+	err = row.Scan(
+		&system.ID64,
+		&system.Name,
+		&system.Coordinates.X,
+		&system.Coordinates.Y,
+		&system.Coordinates.Z,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to scan into pather.System")
+	}
+	return &system, nil
+}
+
+func (db *sqliteDB) scanBodiesToModel(rows *sql.Rows) ([]pather.Star, error) {
+	var (
+		stars []pather.Star
+		err   error
+	)
 	for rows.Next() {
 		var star pather.Star
 		err = rows.Scan(
-			&system.ID64,
-			&system.Name,
-			&system.Coordinates.X,
-			&system.Coordinates.Y,
-			&system.Coordinates.Z,
 			&star.ID64,
 			&star.Name,
 			&star.Type,
@@ -261,10 +300,7 @@ func (db *sqliteDB) scanToModel(rows *sql.Rows) (*pather.System, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "unable to scan into pather.System")
 		}
-		system.Stars = append(system.Stars, star)
+		stars = append(stars, star)
 	}
-	if system.ID64 == 0 {
-		return nil, errors.New("system not in DB")
-	}
-	return &system, err
+	return stars, err
 }

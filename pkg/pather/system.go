@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lunemec/ed-router/pkg/distance"
+	"github.com/lunemec/ed-router/pkg/ship"
 
 	"github.com/beefsack/go-astar"
 	"gonum.org/v1/gonum/spatial/r3"
@@ -21,9 +22,12 @@ type System struct {
 	Name        string
 	Stars       []Star
 
+	ChargeAt *Star
+	RefuelAt *Star
+
 	pather  *pather
 	leadsTo []Jump
-	ship    Ship
+	ship    ship.Ship
 }
 
 type Star struct {
@@ -38,8 +42,10 @@ func (s *System) PathNeighbors() []astar.Pather {
 		neighbors []astar.Pather
 	)
 
-	_, chargeMultiplier := s.Chargeable()
+	closestChargeable, chargeMultiplier := s.Chargeable()
 	maxRange := s.ship.JumpRange() * chargeMultiplier
+
+	s.ChargeAt = closestChargeable
 
 	systemsInRange, err := s.pather.systemsInRangeOf(s, maxRange)
 	if err != nil {
@@ -79,11 +85,11 @@ func (s *System) PathNeighborCost(to astar.Pather) float64 {
 
 // PathEstimatedCost estimates cost in seconds.
 // Estimated cost would be:
-//   ((range from, to) / normal ship range) * seconds to jump to next system
+//   ((range from, to) / (normal ship range * 4)) * seconds to jump to next system
 func (s *System) PathEstimatedCost(to astar.Pather) float64 {
 	toSystem := to.(*System)
 	dist := distance.Distance(s.Coordinates, toSystem.Coordinates)
-	jumps := dist / s.ship.JumpRange()
+	jumps := dist / (s.ship.JumpRange() * 4) // Assume every jump to be neutron.
 	return jumps * secondsToJump
 }
 

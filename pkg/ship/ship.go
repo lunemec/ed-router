@@ -1,4 +1,4 @@
-package pather
+package ship
 
 import "math"
 
@@ -9,24 +9,28 @@ type Ship struct {
 
 	fuelRemaining  float64 // in kg
 	scoopRate      float64 // max scoopRate in kg/s (module description)
-	fsdBooster     bool    // has Guardian FSD Booster
 	mass           float64
 	fsdOptimalMass float64
 	linearConstant float64
 	powerConstant  float64
 }
 
+type (
+	linearConstant float64
+	powerConstant  float64
+)
+
 var (
-	// linearConstant map of FSD rating -> linearConstant
-	linearConstant = map[string]float64{
+	// FSDRating map of fsd rating -> linearConstant
+	FSDRating = map[string]linearConstant{
 		"A": 12,
 		"B": 10,
 		"C": 8,
 		"D": 10,
 		"E": 11,
 	}
-	// FSD class -> powerConstant
-	powerConstant = map[int]float64{
+	// FSDClass map of fsd class -> powerConstant
+	FSDClass = map[int]powerConstant{
 		2: 2.00,
 		3: 2.15,
 		4: 2.30,
@@ -37,15 +41,14 @@ var (
 	}
 )
 
-func NewShip(jumpRange, fuelTank, scoopRate, linearConstant, powerConstant float64, fsdBooster bool) Ship {
+func New(jumpRange, fuelTank, scoopRate float64, linearConstant linearConstant, powerConstant powerConstant) Ship {
 	return Ship{
 		jumpRange:      jumpRange,
 		fuelTank:       fuelTank,
 		fuelRemaining:  fuelTank * 100,
 		scoopRate:      scoopRate,
-		fsdBooster:     fsdBooster,
-		linearConstant: linearConstant,
-		powerConstant:  powerConstant,
+		linearConstant: float64(linearConstant),
+		powerConstant:  float64(powerConstant),
 	}
 }
 
