@@ -43,6 +43,27 @@ func (t *testingSystemsStore) SystemID64sAround(point r3.Vec, d float64) ([]int6
 	return id64s, nil
 }
 
+type fakeShip struct {
+	jumpRange                  float64
+	jumpRangeWithRemainingFuel float64
+	secondsToScoop             float64
+}
+
+func (s fakeShip) Jump(dist float64) (ship.Ship, error) {
+	return s, nil
+}
+
+func (s fakeShip) JumpRange() float64 {
+	return s.jumpRange
+}
+
+func (s fakeShip) JumpRangeWithRemainingFuel() float64 {
+	return s.jumpRangeWithRemainingFuel
+}
+func (s fakeShip) SecondsToScoop() float64 {
+	return s.secondsToScoop
+}
+
 // TestSystemPatherHappyPath tests 2 systems directly next to each other
 // with 3rd farther away.
 func TestSystemPatherHappyPath(t *testing.T) {
@@ -77,13 +98,16 @@ func TestSystemPatherHappyPath(t *testing.T) {
 			},
 		},
 	}
-	s := ship.New(10, 0, 0, ship.FSDRating["A"], ship.FSDClass[5])
+	s := fakeShip{
+		jumpRange:                  10,
+		jumpRangeWithRemainingFuel: 10,
+	}
 	p, err := New(&testStore, s, "Sol", "Sol2")
 	assert.NoError(t, err)
 
 	path, cost, found := p.Path()
 	assert.True(t, found)
-	assert.EqualValues(t, 45, cost)
+	assert.EqualValues(t, 101, cost)
 	assert.Equal(t, 2, len(path))
 	assert.Equal(t, testStore.systems[0], path[0])
 	assert.Equal(t, testStore.systems[1], path[1])
@@ -113,7 +137,10 @@ func TestSystemPatherImpossible(t *testing.T) {
 		},
 	}
 
-	s := ship.New(10, 0, 0, ship.FSDRating["A"], ship.FSDClass[5])
+	s := fakeShip{
+		jumpRange:                  10,
+		jumpRangeWithRemainingFuel: 10,
+	}
 	p, err := New(&testStore, s, "Sol", "Sol2")
 	assert.NoError(t, err)
 
@@ -208,16 +235,230 @@ func TestSystemPatherNeutron(t *testing.T) {
 		},
 	}
 
-	s := ship.New(10, 0, 0, ship.FSDRating["A"], ship.FSDClass[5])
+	s := fakeShip{
+		jumpRange:                  10,
+		jumpRangeWithRemainingFuel: 10,
+	}
 	p, err := New(&testStore, s, "Sol", "Target")
 	assert.NoError(t, err)
 
 	path, cost, found := p.Path()
 	assert.True(t, found)
 
-	assert.EqualValues(t, 100, cost)
+	assert.EqualValues(t, 127, cost)
 	assert.Equal(t, 3, len(path))
 	assert.Equal(t, testStore.systems[0], path[0])
 	assert.Equal(t, testStore.systems[1], path[1])
 	assert.Equal(t, testStore.systems[2], path[2])
+}
+
+// TestSystemPatherNeutronDistant tests 2 systems far enough to be reachable by neutron
+// charge, but neutron is distant from jumpin point, so it will be more worth it to choose
+// more jumps.
+func TestSystemPatherNeutronDistant(t *testing.T) {
+	testStore := testingSystemsStore{
+		systems: []*System{
+			{
+				ID64: 1,
+				Name: "Sol",
+				Coordinates: r3.Vec{
+					X: 0,
+					Y: 0,
+					Z: 0,
+				},
+			},
+			{
+				ID64: 2,
+				Name: "Neutron",
+				Coordinates: r3.Vec{
+					X: 10,
+					Y: 0,
+					Z: 0,
+				},
+				Stars: []Star{
+					{
+						Type:     "Neutron Star",
+						Distance: 4790,
+					},
+				},
+			},
+			{
+				ID64: 3,
+				Name: "Target",
+				Coordinates: r3.Vec{
+					X: 50,
+					Y: 0,
+					Z: 0,
+				},
+			},
+			{
+				ID64: 4,
+				Name: "Filler1",
+				Coordinates: r3.Vec{
+					X: 9,
+					Y: 0,
+					Z: 0,
+				},
+			},
+			{
+				ID64: 5,
+				Name: "Filler2",
+				Coordinates: r3.Vec{
+					X: 19,
+					Y: 0,
+					Z: 0,
+				},
+			},
+			{
+				ID64: 6,
+				Name: "Filler3",
+				Coordinates: r3.Vec{
+					X: 29,
+					Y: 0,
+					Z: 0,
+				},
+			},
+			{
+				ID64: 7,
+				Name: "Filler4",
+				Coordinates: r3.Vec{
+					X: 39,
+					Y: 0,
+					Z: 0,
+				},
+			},
+			{
+				ID64: 8,
+				Name: "Filler5",
+				Coordinates: r3.Vec{
+					X: 49,
+					Y: 0,
+					Z: 0,
+				},
+			},
+		},
+	}
+
+	s := fakeShip{
+		jumpRange:                  10,
+		jumpRangeWithRemainingFuel: 10,
+	}
+	p, err := New(&testStore, s, "Sol", "Target")
+	assert.NoError(t, err)
+
+	path, cost, found := p.Path()
+	assert.True(t, found)
+
+	assert.EqualValues(t, 606, cost)
+	assert.Equal(t, 7, len(path))
+	assert.Equal(t, testStore.systems[0], path[0])
+	assert.Equal(t, testStore.systems[3], path[1])
+	assert.Equal(t, testStore.systems[4], path[2])
+	assert.Equal(t, testStore.systems[5], path[3])
+	assert.Equal(t, testStore.systems[6], path[4])
+	assert.Equal(t, testStore.systems[7], path[5])
+	assert.Equal(t, testStore.systems[2], path[6])
+}
+
+func BenchmarkNeutron(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		testStore := testingSystemsStore{
+			systems: []*System{
+				{
+					ID64: 1,
+					Name: "Sol",
+					Coordinates: r3.Vec{
+						X: 0,
+						Y: 0,
+						Z: 0,
+					},
+				},
+				{
+					ID64: 2,
+					Name: "Neutron",
+					Coordinates: r3.Vec{
+						X: 10,
+						Y: 0,
+						Z: 0,
+					},
+					Stars: []Star{
+						{
+							Type:     "Neutron Star",
+							Distance: 0,
+						},
+					},
+				},
+				{
+					ID64: 3,
+					Name: "Target",
+					Coordinates: r3.Vec{
+						X: 50,
+						Y: 0,
+						Z: 0,
+					},
+				},
+				{
+					ID64: 4,
+					Name: "Filler1",
+					Coordinates: r3.Vec{
+						X: 9,
+						Y: 0,
+						Z: 0,
+					},
+				},
+				{
+					ID64: 5,
+					Name: "Filler2",
+					Coordinates: r3.Vec{
+						X: 19,
+						Y: 0,
+						Z: 0,
+					},
+				},
+				{
+					ID64: 6,
+					Name: "Filler3",
+					Coordinates: r3.Vec{
+						X: 29,
+						Y: 0,
+						Z: 0,
+					},
+				},
+				{
+					ID64: 7,
+					Name: "Filler4",
+					Coordinates: r3.Vec{
+						X: 39,
+						Y: 0,
+						Z: 0,
+					},
+				},
+				{
+					ID64: 8,
+					Name: "Filler5",
+					Coordinates: r3.Vec{
+						X: 49,
+						Y: 0,
+						Z: 0,
+					},
+				},
+			},
+		}
+
+		s := fakeShip{
+			jumpRange:                  10,
+			jumpRangeWithRemainingFuel: 10,
+		}
+		p, err := New(&testStore, s, "Sol", "Target")
+		assert.NoError(b, err)
+
+		path, cost, found := p.Path()
+		assert.True(b, found)
+
+		assert.EqualValues(b, 127, cost)
+		assert.Equal(b, 3, len(path))
+		assert.Equal(b, testStore.systems[0], path[0])
+		assert.Equal(b, testStore.systems[1], path[1])
+		assert.Equal(b, testStore.systems[2], path[2])
+	}
 }

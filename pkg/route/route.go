@@ -28,7 +28,7 @@ func Route(cmd *cobra.Command, args []string) error {
 		return errors.New("what do you want from me?!")
 	}
 
-	ship := ship.New(72.52, 32, 878, ship.FSDRating["A"], ship.FSDClass[5])
+	ship := ship.New(32, 346.9, 1692.6, 5, 10.5, 878, ship.FSDRating["A"], ship.FSDClass[5])
 
 	p, err := pather.New(db, ship, fromName, toName)
 	if err != nil {
@@ -41,9 +41,8 @@ func Route(cmd *cobra.Command, args []string) error {
 	fmt.Printf(`
 Start: %s at %+v
 End: %s at %+v
-Distance: %f LY
-Estimated cost (time): %fs
-`, from.Name, from.Coordinates, to.Name, to.Coordinates, p.Distance(), from.PathEstimatedCost(to))
+Distance: %.1f LY
+`, from.Name, from.Coordinates, to.Name, to.Coordinates, p.Distance())
 
 	path, cost, found := p.Path()
 	if !found {
@@ -66,13 +65,13 @@ Found path with cost: %f
 		}
 
 		if system.RefuelAt != nil {
-			refuel = fmt.Sprintf("Y [%s (%f)]", system.RefuelAt.Name, system.RefuelAt.Distance)
+			refuel = fmt.Sprintf("Y [%s (%.1f Ls)]", system.RefuelAt.Name, system.RefuelAt.Distance)
 		}
 		if system.ChargeAt != nil {
-			neutron = fmt.Sprintf("Y [%s (%f)]", system.ChargeAt.Name, system.ChargeAt.Distance)
+			neutron = fmt.Sprintf("Y [%s (%.1f Ls)]", system.ChargeAt.Name, system.ChargeAt.Distance)
 		}
 
-		fmt.Printf("[%d] SUPERCHARGE: %s REFUEL: %s %s (%f LY) \n", i, neutron, refuel, system.Name, dist)
+		fmt.Printf("[%d] SUPERCHARGE: %s REFUEL: %s %s (%.1f LY) \n", i, neutron, refuel, system.Name, dist)
 		prevSystem = system
 	}
 	return nil

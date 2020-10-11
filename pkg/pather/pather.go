@@ -89,6 +89,10 @@ func (p *pather) Path() ([]*System, float64, bool) {
 	return systems, cost, true
 }
 
+func (p *pather) isInCylinder(point r3.Vec) bool {
+	return isInCylinder(p.from.Coordinates, p.to.Coordinates, p.from.ship.JumpRange(), point)
+}
+
 func (p *pather) cleanup(node astar.Pather) {
 	system := node.(*System)
 	delete(p.systems, system.ID64)

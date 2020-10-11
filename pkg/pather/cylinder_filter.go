@@ -1,4 +1,4 @@
-package route
+package pather
 
 import (
 	"gonum.org/v1/gonum/spatial/r3"

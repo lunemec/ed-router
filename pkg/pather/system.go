@@ -59,7 +59,11 @@ func (s *System) PathNeighbors() []astar.Pather {
 		}
 		dist := distance.Distance(s.Coordinates, otherSystem.Coordinates)
 		if dist <= maxRange {
-			otherSystem.ship = s.ship.Jump(dist) // TODO
+			newShip, err := s.ship.Jump(dist)
+			if err != nil {
+				continue
+			}
+			otherSystem.ship = newShip
 			s.leadsTo = append(s.leadsTo, Jump{
 				from: s,
 				to:   otherSystem,
@@ -75,22 +79,32 @@ func (s *System) PathNeighbors() []astar.Pather {
 // PathNeighborCost is cost of this neighbor in seconds.
 //
 func (s *System) PathNeighborCost(to astar.Pather) float64 {
-	secondsCost := secondsToJump
-	chargeStar, _ := s.Chargeable()
+	// We reduce cost by 75 for neutron and by 25 by scoopable.
+	// Ideal case is system with neutron + scoopable at 0 Ls, which is impossible.
+	cost := 101.0
+
+	toSystem := to.(*System)
+
+	chargeStar, _ := toSystem.Chargeable()
 	if chargeStar != nil {
-		secondsCost = secondsToJump + secondsToSupercharge
+		cost -= 75.0
+		// Increase cost when neutron star is far away from jump-in point.
+		cost += (chargeStar.Distance / 10.0)
 	}
-	return secondsCost
+	scoopableStar := toSystem.Scoopable()
+	if scoopableStar != nil {
+		cost -= 25.0
+		// It is not worth it to fly very far in supercruise for refuel.
+		// TODO: reasoning + calculation.
+		cost += scoopableStar.Distance
+	}
+	return cost
 }
 
-// PathEstimatedCost estimates cost in seconds.
-// Estimated cost would be:
-//   ((range from, to) / (normal ship range * 4)) * seconds to jump to next system
+// PathEstimatedCost estimates cost in LY.
 func (s *System) PathEstimatedCost(to astar.Pather) float64 {
 	toSystem := to.(*System)
-	dist := distance.Distance(s.Coordinates, toSystem.Coordinates)
-	jumps := dist / (s.ship.JumpRange() * 4) // Assume every jump to be neutron.
-	return jumps * secondsToJump
+	return distance.Distance(s.Coordinates, toSystem.Coordinates)
 }
 
 func (s *System) Chargeable() (*Star, float64) {
@@ -124,9 +138,31 @@ func (s *System) Scoopable() *Star {
 	// KGBFOAM stars are scoopable.
 	var closestScoopable *Star
 	for _, star := range s.Stars {
-		if star.Type == "" {
+		switch star.Type {
+		case
+			"A (Blue-White super giant) Star",
+			"A (Blue-White) Star",
+			"B (Blue-White super giant) Star",
+			"B (Blue-White) Star",
+			"F (White super giant) Star",
+			"F (White) Star",
+			"G (White-Yellow super giant) Star",
+			"G (White-Yellow) Star",
+			"K (Yellow-Orange giant) Star",
+			"K (Yellow-Orange) Star",
+			"M (Red dwarf) Star",
+			"M (Red giant) Star",
+			"M (Red super giant) Star",
+			"O (Blue-White) Star":
 
+			if closestScoopable == nil {
+				closestScoopable = &star
+			}
+			if star.Distance < closestScoopable.Distance {
+				closestScoopable = &star
+			}
 		}
+
 	}
 	return closestScoopable
 }
