@@ -16,9 +16,6 @@ github.com/json-iterator/go
 ## explicit
 # github.com/mattn/go-runewidth v0.0.9
 github.com/mattn/go-runewidth
-# github.com/mattn/go-sqlite3 v1.14.3
-## explicit
-github.com/mattn/go-sqlite3
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
@@ -41,15 +38,21 @@ github.com/spf13/pflag
 # github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
+github.com/stretchr/testify/require
+github.com/stretchr/testify/suite
 # github.com/vbauerster/mpb/v5 v5.3.0
 ## explicit
 github.com/vbauerster/mpb/v5
 github.com/vbauerster/mpb/v5/cwriter
 github.com/vbauerster/mpb/v5/decor
 github.com/vbauerster/mpb/v5/internal
+# go.etcd.io/bbolt v1.3.5
+## explicit
+go.etcd.io/bbolt
 # golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136
 ## explicit
-# golang.org/x/sys v0.0.0-20200810151505-1b9f1253b3ed
+# golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f
+## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows

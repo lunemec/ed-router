@@ -77,6 +77,7 @@ func New(fuelTank, mass, fsdOptimalMass, maxFuelPerJump, guardianFSDBoosterRange
 // with calculated fuelRemaining.
 // https://elite-dangerous.fandom.com/wiki/Frame_Shift_Drive#Hyperspace_Fuel_Equation
 func (s ship) Jump(distance float64) (Ship, error) {
+	return s, nil
 	fuelRequired := s.fuelToJump(distance)
 	if s.fuelRemaining < fuelRequired {
 		return s, ErrNotEnoughFuel

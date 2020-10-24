@@ -3,6 +3,7 @@ package pather
 import (
 	"math"
 
+	"github.com/lunemec/ed-router/pkg/db/boltdb"
 	"github.com/lunemec/ed-router/pkg/distance"
 	"github.com/lunemec/ed-router/pkg/ship"
 
@@ -18,13 +19,6 @@ const (
 	secondsToSupercharge float64 = 10
 )
 
-// SystemsStore is any type that implements methods required for router to work.
-type SystemsStore interface {
-	SystemByID64(id64 int64) (*System, error)
-	SystemByName(name string) (*System, error)
-	SystemID64sAround(point r3.Vec, distance float64) ([]int64, error)
-}
-
 type Pather interface {
 	From() *System
 	To() *System
@@ -33,17 +27,17 @@ type Pather interface {
 }
 
 type pather struct {
-	systems map[int64]*System
-	store   SystemsStore
+	systems map[uint64]*System
+	store   *boltdb.DB
 
 	from     *System
 	to       *System
 	distance float64
 }
 
-func New(store SystemsStore, ship ship.Ship, fromName, toName string) (Pather, error) {
+func New(store *boltdb.DB, ship ship.Ship, fromName, toName string) (Pather, error) {
 	var p = pather{
-		systems: make(map[int64]*System),
+		systems: make(map[uint64]*System),
 		store:   store,
 	}
 
@@ -78,7 +72,7 @@ func (p *pather) Distance() float64 {
 }
 
 func (p *pather) Path() ([]*System, float64, bool) {
-	path, cost, found := astar.Path(p.from, p.to, p.cleanup)
+	path, cost, found := astar.Path(p.from, p.to)
 	if !found {
 		return nil, 0, false
 	}
@@ -93,31 +87,20 @@ func (p *pather) isInCylinder(point r3.Vec) bool {
 	return isInCylinder(p.from.Coordinates, p.to.Coordinates, p.from.ship.JumpRange(), point)
 }
 
-func (p *pather) cleanup(node astar.Pather) {
-	system := node.(*System)
-	delete(p.systems, system.ID64)
-}
-
-func (p *pather) systemByID64(id64 int64) (*System, error) {
-	sc, ok := p.systems[id64]
-	if ok {
-		return sc, nil
-	}
-
-	s, err := p.store.SystemByID64(id64)
-	if err != nil {
-		return nil, err
-	}
-
-	s.pather = p
-	p.systems[id64] = s
-	return s, nil
-}
-
 func (p *pather) systemByName(name string) (*System, error) {
-	s, err := p.store.SystemByName(name)
+	dbS, err := p.store.SystemByName(name)
 	if err != nil {
 		return nil, err
+	}
+	s := &System{
+		Coordinates: r3.Vec{
+			X: dbS.Coordinates.X,
+			Y: dbS.Coordinates.Y,
+			Z: dbS.Coordinates.Z,
+		},
+		ID64:      dbS.ID64,
+		Neutron:   boltdb.NeutronInRange(dbS.Bodies),
+		Scoopable: boltdb.ScoopableInRange(dbS.Bodies),
 	}
 	sc, ok := p.systems[s.ID64]
 	if !ok {
@@ -129,18 +112,25 @@ func (p *pather) systemByName(name string) (*System, error) {
 }
 
 func (p *pather) systemsInRangeOf(s *System, distance float64) ([]*System, error) {
-	id64s, err := p.store.SystemID64sAround(s.Coordinates, distance)
+	minX := s.Coordinates.X - distance
+	maxX := s.Coordinates.X + distance
+	minY := s.Coordinates.Y - distance
+	maxY := s.Coordinates.Y + distance
+	minZ := s.Coordinates.Z - distance
+	maxZ := s.Coordinates.Z + distance
+	dbSystems, err := p.store.PointsWithin(minX, maxX, minY, maxY, minZ, maxZ)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get systems in range of %s", s.Name)
+		return nil, errors.Wrapf(err, "unable to get systems in range of %d", s.ID64)
 	}
 
 	var systems []*System
-	for _, id64 := range id64s {
-		s, err := p.systemByID64(id64)
-		if err != nil {
-			return nil, errors.Wrapf(err, "unable to get system by id64: %d", id64)
-		}
-		systems = append(systems, s)
+	for _, dbSystem := range dbSystems {
+		systems = append(systems, &System{
+			Coordinates: r3.Vec{X: dbSystem.X, Y: dbSystem.Y, Z: dbSystem.Z},
+			ID64:        dbSystem.ID64,
+			Neutron:     dbSystem.IsNeutron,
+			Scoopable:   dbSystem.IsScoopable,
+		})
 	}
 	return systems, nil
 }

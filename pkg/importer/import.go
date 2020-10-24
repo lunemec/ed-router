@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/lunemec/ed-router/pkg/db/sqlite"
+	"github.com/lunemec/ed-router/pkg/db/boltdb"
 	"github.com/lunemec/ed-router/pkg/models/dump"
 
 	jsoniter "github.com/json-iterator/go"
@@ -17,7 +17,10 @@ import (
 	"github.com/vbauerster/mpb/v5/decor"
 )
 
-var DefaultDB = "galaxy.db"
+var (
+	IndexDB  = "index.db"
+	GalaxyDB = "galaxy.db"
+)
 
 // Import is the main entrypoint for path routing.Import
 // expects 2 arguments [from] and [to].
@@ -33,8 +36,7 @@ func Import(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	var dbFile = DefaultDB
-	db, err := sqlite.Open(dbFile)
+	db, err := boltdb.Open(IndexDB, GalaxyDB)
 	if err != nil {
 		return errors.Wrap(err, "unable to open DB")
 	}
@@ -61,13 +63,14 @@ func Import(cmd *cobra.Command, args []string) error {
 		if iter.Error != nil {
 			return errors.Wrap(err, "error decoding system")
 		}
-		err = db.InsertSystem(&system)
+		err = db.InsertSystem(system)
 		if err != nil {
 			return errors.Wrap(err, "error inserting system to DB")
 		}
 	}
+	db.StopInsert()
 
-	return nil
+	return db.Close()
 }
 
 func progressBar(dumpFile *os.File) (*mpb.Progress, io.ReadCloser, error) {

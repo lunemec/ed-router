@@ -3,9 +3,8 @@ package route
 import (
 	"fmt"
 
-	"github.com/lunemec/ed-router/pkg/db/sqlite"
+	"github.com/lunemec/ed-router/pkg/db/boltdb"
 	"github.com/lunemec/ed-router/pkg/distance"
-	"github.com/lunemec/ed-router/pkg/importer"
 	"github.com/lunemec/ed-router/pkg/pather"
 	"github.com/lunemec/ed-router/pkg/ship"
 
@@ -13,14 +12,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	IndexDB  = "index.db"
+	GalaxyDB = "galaxy.db"
+)
+
 // Route is the main entrypoint for path routing.Route
 // expects 2 arguments [from] and [to].
 func Route(cmd *cobra.Command, args []string) error {
-	dbFile := importer.DefaultDB
-	db, err := sqlite.Open(dbFile)
+	db, err := boltdb.Open(IndexDB, GalaxyDB)
 	if err != nil {
-		return errors.Wrapf(err, "unable to open database %s", dbFile)
+		return errors.Wrap(err, "unable to open database")
 	}
+
 	fromName := args[0]
 	toName := args[1]
 
@@ -34,15 +38,27 @@ func Route(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Wrap(err, "unable to initialize new pather")
 	}
+	s, err := db.SystemByName("sol")
+	if err != nil {
+		return errors.Wrap(err, "unable to get sol by name")
+	}
+	fmt.Printf("%+v \n", s)
+
+	sol, err := db.PointsWithin(0, 0, 0, 0, 0, 0)
+	if err != nil {
+		return errors.Wrap(err, "unable to get sol")
+	}
+	fmt.Printf("Sol? %+v \n", sol)
+	return nil
 
 	from := p.From()
 	to := p.To()
 
 	fmt.Printf(`
-Start: %s at %+v
-End: %s at %+v
+Start: %d at %+v
+End: %d at %+v
 Distance: %.1f LY
-`, from.Name, from.Coordinates, to.Name, to.Coordinates, p.Distance())
+`, from.ID64, from.Coordinates, to.ID64, to.Coordinates, p.Distance())
 
 	path, cost, found := p.Path()
 	if !found {
@@ -64,14 +80,14 @@ Found path with cost: %f
 			dist = distance.Distance(prevSystem.Coordinates, system.Coordinates)
 		}
 
-		if system.RefuelAt != nil {
-			refuel = fmt.Sprintf("Y [%s (%.1f Ls)]", system.RefuelAt.Name, system.RefuelAt.Distance)
-		}
-		if system.ChargeAt != nil {
-			neutron = fmt.Sprintf("Y [%s (%.1f Ls)]", system.ChargeAt.Name, system.ChargeAt.Distance)
-		}
+		// if system.RefuelAt != nil {
+		// 	refuel = fmt.Sprintf("Y [%s (%.1f Ls)]", system.RefuelAt.Name, system.RefuelAt.Distance)
+		// }
+		// if system.ChargeAt != nil {
+		// 	neutron = fmt.Sprintf("Y [%s (%.1f Ls)]", system.ChargeAt.Name, system.ChargeAt.Distance)
+		// }
 
-		fmt.Printf("[%d] SUPERCHARGE: %s REFUEL: %s %s (%.1f LY) \n", i, neutron, refuel, system.Name, dist)
+		fmt.Printf("[%d] SUPERCHARGE: %s REFUEL: %s %s (%.1f LY) \n", i, neutron, refuel, system.ID64, dist)
 		prevSystem = system
 	}
 	return nil
