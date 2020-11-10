@@ -284,6 +284,62 @@ func (t *BoltDBTestSuite) TestIndexBatchWriter() {
 	t.Equal(items, len(systems))
 }
 
+func TestIndexValueMarshalSingle(t *testing.T) {
+	s := System{ID64: 2,
+		X: 1, Y: 2, Z: 3}
+	b := MarshalIndexValueSingle(s)
+	s2 := UnmarshalIndexValueSingle(b)
+
+	assert.Equal(t, s, s2)
+}
+
+func (t *BoltDBTestSuite) TestNestedBuckets() {
+	systems := []interface{}{
+		System{ID64: 1,
+			X: 0, Y: 0, Z: 0},
+		System{ID64: 2,
+			X: 1, Y: 2, Z: 3},
+		System{ID64: 3,
+			X: -9, Y: 9, Z: 9},
+		System{ID64: 4,
+			X: 10.1, Y: 9, Z: 9},
+		System{ID64: 5,
+			X: 0, Y: -10.01, Z: 9},
+		System{ID64: 6,
+			X: 0, Y: 9, Z: 10.001},
+	}
+
+	for _, systemInterface := range systems {
+		system := systemInterface.(System)
+		err := t.db.index.Update(func(tx *bolt.Tx) error {
+			root, err := tx.CreateBucketIfNotExists([]byte("root"))
+			if err != nil {
+				return err
+			}
+			xbucket, err := root.CreateBucketIfNotExists(MarshalIndexKey(system.X))
+			if err != nil {
+				return err
+			}
+			ybucket, err := xbucket.CreateBucketIfNotExists(MarshalIndexKey(system.Y))
+			if err != nil {
+				return err
+			}
+			err = ybucket.Put(MarshalIndexKey(system.Z), MarshalIndexValueSingle(system))
+			return err
+		})
+		t.NoError(err)
+	}
+
+	t.db.index.View(func(tx *bolt.Tx) error {
+		return nil
+	})
+	points, err := t.db.PointsWithinXYZBuckets(-10, 10, -10, 10, -10, 10)
+	t.NoError(err)
+	t.Contains(points, systems[0])
+	t.Contains(points, systems[1])
+	t.Contains(points, systems[2])
+}
+
 func (t *BoltDBTestSuite) TestIndexBatchWriterMultipleSameCoordinates() {
 	systems := []interface{}{
 		System{ID64: 123,
@@ -382,7 +438,7 @@ func (t *BoltDBTestSuite) TestBoltDBPointsWithin() {
 }
 
 func BenchmarkBoltDBPointsWithin(b *testing.B) {
-	db, err := Open(testIndexFile, testGalaxyFile)
+	db, err := Open(testIndexFile, testGalaxyFile, false)
 	assert.NoError(b, err)
 
 	defer func() {
@@ -432,6 +488,67 @@ func BenchmarkBoltDBPointsWithin(b *testing.B) {
 	assert.Contains(b, points, systems[2])
 }
 
+func BenchmarkBoltDBPointsWithinXYZBuckets(b *testing.B) {
+	db, err := Open(testIndexFile, testGalaxyFile, false)
+	assert.NoError(b, err)
+
+	defer func() {
+		db.galaxy.Close()
+		db.index.Close()
+
+		assert.NoError(b, os.Remove(testIndexFile))
+		assert.NoError(b, os.Remove(testGalaxyFile))
+	}()
+
+	systems := []interface{}{
+		System{ID64: 1,
+			X: 0, Y: 0, Z: 0},
+		System{ID64: 2,
+			X: 1, Y: 2, Z: 3},
+		System{ID64: 3,
+			X: -9, Y: 9, Z: 9},
+		System{ID64: 4,
+			X: 10.1, Y: 9, Z: 9},
+		System{ID64: 5,
+			X: 0, Y: -10.01, Z: 9},
+		System{ID64: 6,
+			X: 0, Y: 9, Z: 10.001},
+	}
+
+	for _, systemInterface := range systems {
+		system := systemInterface.(System)
+		err := db.index.Update(func(tx *bolt.Tx) error {
+			root, err := tx.CreateBucketIfNotExists([]byte("root"))
+			if err != nil {
+				return err
+			}
+			xbucket, err := root.CreateBucketIfNotExists(MarshalIndexKey(system.X))
+			if err != nil {
+				return err
+			}
+			ybucket, err := xbucket.CreateBucketIfNotExists(MarshalIndexKey(system.Y))
+			if err != nil {
+				return err
+			}
+			err = ybucket.Put(MarshalIndexKey(system.Z), MarshalIndexValueSingle(system))
+			return err
+		})
+		assert.NoError(b, err)
+	}
+
+	var points []System
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// 4862 ns/op	    1880 B/op	      40 allocs/op
+		points, err = db.PointsWithinXYZBuckets(-10, 10, -10, 10, -10, 10)
+	}
+	assert.NoError(b, err)
+	assert.Contains(b, points, systems[0])
+	assert.Contains(b, points, systems[1])
+	assert.Contains(b, points, systems[2])
+}
+
 func (t *BoltDBTestSuite) TestIndexInsert() {
 	data := []interface{}{
 		System{ID64: 1, X: 0, Y: 0, Z: 0},
@@ -443,4 +560,49 @@ func (t *BoltDBTestSuite) TestIndexInsert() {
 	t.NoError(err)
 
 	t.Contains(points, data[0])
+}
+
+func BenchmarkBoltDBPointsWithinReal(b *testing.B) {
+	db, err := Open("../../../index.db", "../../../galaxy.db", true)
+	assert.NoError(b, err)
+
+	var points []System
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// 53713620 ns/op	91789220 B/op	    1988 allocs/op
+		points, err = db.PointsWithin(-10, 10, -10, 10, -10, 10)
+	}
+	assert.NoError(b, err)
+	assert.Len(b, points, 26)
+}
+
+func BenchmarkBoltDBPointsWithinRealConcurrent(b *testing.B) {
+	db, err := Open("../../../index.db", "../../../galaxy.db", true)
+	assert.NoError(b, err)
+
+	var points []System
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// 53219721 ns/op	91789230 B/op	    1988 allocs/op
+		points, err = db.PointsWithinConcurrent(-10, 10, -10, 10, -10, 10)
+	}
+	assert.NoError(b, err)
+	assert.Len(b, points, 26)
+}
+
+func BenchmarkBoltDBPointsWithinXYZBucketsReal(b *testing.B) {
+	db, err := Open("../../../index_xyz.db", "../../../galaxy.db", true)
+	assert.NoError(b, err)
+
+	var points []System
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// 35366024 ns/op	11614159 B/op	  220402 allocs/op
+		points, err = db.PointsWithinXYZBuckets(-10, 10, -10, 10, -10, 10)
+	}
+	assert.NoError(b, err)
+	assert.Len(b, points, 27)
 }

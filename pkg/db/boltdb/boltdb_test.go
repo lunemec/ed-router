@@ -23,7 +23,7 @@ var (
 )
 
 func (t *BoltDBTestSuite) SetupTest() {
-	db, err := Open(testIndexFile, testGalaxyFile)
+	db, err := Open(testIndexFile, testGalaxyFile, false)
 	t.Require().NoError(err)
 
 	t.db = db
@@ -38,15 +38,15 @@ func (t *BoltDBTestSuite) TearDownTest() {
 }
 
 func TestNeutronInRange(t *testing.T) {
-	assert.True(t, NeutronInRange([]dump.Body{{Type: "Neutron Star", DistanceToArrival: 0}}))
-	assert.False(t, NeutronInRange([]dump.Body{{Type: "???", DistanceToArrival: 0}}))
-	assert.False(t, NeutronInRange([]dump.Body{{Type: "Neutron Star", DistanceToArrival: 1000.1}}))
+	assert.True(t, NeutronInRange([]dump.Body{{Type: "Star", SubType: "Neutron Star", DistanceToArrival: 0}}))
+	assert.False(t, NeutronInRange([]dump.Body{{Type: "Star", SubType: "???", DistanceToArrival: 0}}))
+	assert.False(t, NeutronInRange([]dump.Body{{Type: "Star", SubType: "Neutron Star", DistanceToArrival: 1000.1}}))
 }
 
 func TestScoopableInRange(t *testing.T) {
-	assert.True(t, ScoopableInRange([]dump.Body{{Type: "K (Yellow-Orange giant) Star", DistanceToArrival: 0}}))
-	assert.False(t, ScoopableInRange([]dump.Body{{Type: "K (Yellow-Orange giant) Star", DistanceToArrival: 1000.1}}))
-	assert.False(t, ScoopableInRange([]dump.Body{{Type: "Neutron Star", DistanceToArrival: 0}}))
+	assert.True(t, ScoopableInRange([]dump.Body{{Type: "Star", SubType: "K (Yellow-Orange giant) Star", DistanceToArrival: 0}}))
+	assert.False(t, ScoopableInRange([]dump.Body{{Type: "Star", SubType: "K (Yellow-Orange giant) Star", DistanceToArrival: 1000.1}}))
+	assert.False(t, ScoopableInRange([]dump.Body{{Type: "Star", SubType: "Neutron Star", DistanceToArrival: 0}}))
 }
 
 func (t *BoltDBTestSuite) TestImport() {

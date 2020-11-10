@@ -15,6 +15,7 @@ var (
 	bucketX       = []byte("x")
 	bucketY       = []byte("y")
 	bucketZ       = []byte("z")
+	bucketRoot    = []byte("root")
 	bucketSystems = []byte("systems")
 	bucketNames   = []byte("names")
 )
@@ -31,28 +32,35 @@ type DB struct {
 	errors []error
 }
 
-func Open(indexFile, galaxyFile string) (*DB, error) {
+func Open(indexFile, galaxyFile string, readOnly bool) (*DB, error) {
 	var (
 		indexErrMsg  = fmt.Sprintf("unable to open index DB: %s", indexFile)
 		galaxyErrMsg = fmt.Sprintf("unable to open galaxy DB: %s", galaxyFile)
 	)
 
-	index, err := bolt.Open(indexFile, 0666, nil)
+	var options bolt.Options
+	if readOnly {
+		options.ReadOnly = true
+	}
+
+	index, err := bolt.Open(indexFile, 0666, &options)
 	if err != nil {
 		return nil, errors.Wrap(err, indexErrMsg)
 	}
-	galaxy, err := bolt.Open(galaxyFile, 0666, nil)
+	galaxy, err := bolt.Open(galaxyFile, 0666, &options)
 	if err != nil {
 		return nil, errors.Wrapf(err, galaxyErrMsg)
 	}
 
-	err = prepareIndexDB(index)
-	if err != nil {
-		return nil, errors.Wrap(err, indexErrMsg)
-	}
-	err = prepareGalaxyDB(galaxy)
-	if err != nil {
-		return nil, errors.Wrap(err, galaxyErrMsg)
+	if !readOnly {
+		err = prepareIndexDB(index)
+		if err != nil {
+			return nil, errors.Wrap(err, indexErrMsg)
+		}
+		err = prepareGalaxyDB(galaxy)
+		if err != nil {
+			return nil, errors.Wrap(err, galaxyErrMsg)
+		}
 	}
 
 	return &DB{index: index, galaxy: galaxy, input: make(chan dump.System)}, nil
@@ -74,6 +82,10 @@ func prepareIndexDB(db *bolt.DB) error {
 		_, err = tx.CreateBucketIfNotExists(bucketZ)
 		if err != nil {
 			return errors.Wrap(err, "unable to create Z bucket")
+		}
+		_, err = tx.CreateBucketIfNotExists(bucketRoot)
+		if err != nil {
+			return errors.Wrap(err, "unable to create root bucket")
 		}
 		return nil
 	})
@@ -147,7 +159,7 @@ func (db *DB) consumer() {
 		}
 	}()
 	db.wg.Add(1)
-	go batchWriter(&db.wg, db.index, errChan, indexChan, IndexBatchWriter)
+	go batchWriter(&db.wg, db.index, errChan, indexChan, IndexBatchWriterXYZBuckets)
 	db.wg.Add(1)
 	go batchWriter(&db.wg, db.galaxy, errChan, galaxyChan, GalaxyBatchWriter)
 
@@ -174,7 +186,7 @@ type batchWriterFunc func(db *bolt.DB, batch []interface{}) error
 func batchWriter(wg *sync.WaitGroup, db *bolt.DB, errChan chan error, data chan interface{}, writerFunc batchWriterFunc) {
 	defer wg.Done()
 	var (
-		batchSize = 1000
+		batchSize = 10000
 		batch     []interface{}
 	)
 
@@ -208,8 +220,11 @@ func NeutronInRange(bodies []dump.Body) bool {
 	}
 
 	for _, body := range bodies {
+		if body.Type != "Star" {
+			continue
+		}
 		// White dwarfs are not checked since they are considered "not worth it".
-		if body.Type == "Neutron Star" {
+		if body.SubType == "Neutron Star" {
 			if body.DistanceToArrival <= maxDistance {
 				return true
 			}

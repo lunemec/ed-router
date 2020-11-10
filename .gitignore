@@ -1,4 +1,2 @@
 galaxy.json.gz
-galaxy.db
-galaxy.db-journal
-index.db
+*.db

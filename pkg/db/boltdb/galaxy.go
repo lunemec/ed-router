@@ -23,6 +23,14 @@ func UnmarshalGalaxyKey(b []byte) uint64 {
 }
 
 func MarshalGalaxyValue(s dump.System) ([]byte, error) {
+	// Filter out only stars to save disk spase on my tidy SSD.
+	var starsOnly []dump.Body
+	for _, body := range s.Bodies {
+		if body.Type == "Star" {
+			starsOnly = append(starsOnly, body)
+		}
+	}
+	s.Bodies = starsOnly
 	return json.Marshal(s)
 }
 
@@ -45,6 +53,7 @@ func GalaxyBatchWriter(db *bolt.DB, batch []interface{}) error {
 	if err != nil {
 		return err
 	}
+	setWriteFlag(tx)
 	defer tx.Rollback()
 
 	systemsBucket := tx.Bucket(bucketSystems)
@@ -84,6 +93,30 @@ func insertName(bucket *bolt.Bucket, name string, id64 uint64) error {
 		return errors.Wrap(err, "unable to insert dimension coordinates to bucket")
 	}
 	return nil
+}
+
+func (db *DB) SystemByID(id64 uint64) (dump.System, error) {
+	var (
+		err    error
+		system dump.System
+	)
+	err = db.galaxy.View(func(tx *bolt.Tx) error {
+		var err error
+
+		k, value := tx.Bucket(bucketSystems).Cursor().Seek(MarshalGalaxyKey(id64))
+		if k == nil {
+			return errors.Errorf("unable to find system by ID64: %d", id64)
+		}
+		system, err = UnmarshalGalaxyValue(value)
+		if err != nil {
+			return errors.Wrapf(err, "unable to unmarshal galaxy data for ID64: %d", id64)
+		}
+		return nil
+	})
+	if err != nil {
+		return system, errors.Wrap(err, "unable to get system by name")
+	}
+	return system, nil
 }
 
 func (db *DB) SystemByName(name string) (dump.System, error) {

@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	IndexDB  = "index.db"
+	IndexDB  = "index_xyz.db"
 	GalaxyDB = "galaxy.db"
 )
 
@@ -36,7 +36,7 @@ func Import(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	db, err := boltdb.Open(IndexDB, GalaxyDB)
+	db, err := boltdb.Open(IndexDB, GalaxyDB, false)
 	if err != nil {
 		return errors.Wrap(err, "unable to open DB")
 	}
@@ -63,6 +63,7 @@ func Import(cmd *cobra.Command, args []string) error {
 		if iter.Error != nil {
 			return errors.Wrap(err, "error decoding system")
 		}
+
 		err = db.InsertSystem(system)
 		if err != nil {
 			return errors.Wrap(err, "error inserting system to DB")

@@ -9,18 +9,21 @@ import (
 	"github.com/lunemec/ed-router/pkg/ship"
 
 	"github.com/pkg/errors"
+	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
 )
 
 var (
-	IndexDB  = "index.db"
+	IndexDB  = "index_xyz.db"
 	GalaxyDB = "galaxy.db"
 )
 
 // Route is the main entrypoint for path routing.Route
 // expects 2 arguments [from] and [to].
 func Route(cmd *cobra.Command, args []string) error {
-	db, err := boltdb.Open(IndexDB, GalaxyDB)
+	defer profile.Start().Stop()
+
+	db, err := boltdb.Open(IndexDB, GalaxyDB, true)
 	if err != nil {
 		return errors.Wrap(err, "unable to open database")
 	}
@@ -33,23 +36,11 @@ func Route(cmd *cobra.Command, args []string) error {
 	}
 
 	ship := ship.New(32, 346.9, 1692.6, 5, 10.5, 878, ship.FSDRating["A"], ship.FSDClass[5])
-
+	fmt.Printf("Jump Range: %f \n", ship.JumpRange())
 	p, err := pather.New(db, ship, fromName, toName)
 	if err != nil {
 		return errors.Wrap(err, "unable to initialize new pather")
 	}
-	s, err := db.SystemByName("sol")
-	if err != nil {
-		return errors.Wrap(err, "unable to get sol by name")
-	}
-	fmt.Printf("%+v \n", s)
-
-	sol, err := db.PointsWithin(0, 0, 0, 0, 0, 0)
-	if err != nil {
-		return errors.Wrap(err, "unable to get sol")
-	}
-	fmt.Printf("Sol? %+v \n", sol)
-	return nil
 
 	from := p.From()
 	to := p.To()
@@ -67,27 +58,37 @@ Distance: %.1f LY
 	}
 	fmt.Printf(`
 Found path with cost: %f
-`, cost)
+Systems checked: %d
+`, cost, p.Stats())
 
 	var (
-		prevSystem *pather.System
-		dist       float64
-		neutron    = "N"
-		refuel     = "N"
+		prevSystem      *pather.System
+		dist            float64
+		neutron, refuel string
 	)
 	for i, system := range path {
 		if prevSystem != nil {
 			dist = distance.Distance(prevSystem.Coordinates, system.Coordinates)
 		}
 
-		// if system.RefuelAt != nil {
-		// 	refuel = fmt.Sprintf("Y [%s (%.1f Ls)]", system.RefuelAt.Name, system.RefuelAt.Distance)
-		// }
-		// if system.ChargeAt != nil {
-		// 	neutron = fmt.Sprintf("Y [%s (%.1f Ls)]", system.ChargeAt.Name, system.ChargeAt.Distance)
-		// }
+		if system.Neutron {
+			neutron = "Y"
+		} else {
+			neutron = "N"
+		}
 
-		fmt.Printf("[%d] SUPERCHARGE: %s REFUEL: %s %s (%.1f LY) \n", i, neutron, refuel, system.ID64, dist)
+		if system.Scoopable {
+			refuel = "Y"
+		} else {
+			refuel = "N"
+		}
+
+		fullSystem, err := db.SystemByID(system.ID64)
+		if err != nil {
+			fmt.Printf("%+v \n", err)
+		}
+
+		fmt.Printf("[%d] SUPERCHARGE: %s REFUEL: %s %s (%.1f LY) \n", i, neutron, refuel, fullSystem.Name, dist)
 		prevSystem = system
 	}
 	return nil
