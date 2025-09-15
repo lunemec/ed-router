@@ -1,345 +1,611 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elite Dangerous High-Performance Router</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .search-results {
-            position: absolute;
-            z-index: 10;
-            width: 100%;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        .search-item:hover {
-            background-color: #4a5568;
-        }
-        .loader {
-            border-top-color: #3498db;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-</head>
-<body class="bg-gray-900 text-gray-200">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Elite Dangerous High-Performance Router</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            body {
+                font-family: "Inter", sans-serif;
+            }
+            .search-results {
+                position: absolute;
+                z-index: 10;
+                width: 100%;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+            .search-item:hover {
+                background-color: #4a5568;
+            }
+            .loader {
+                border-top-color: #3498db;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    </head>
+    <body class="bg-gray-900 text-gray-200">
+        <div class="container mx-auto p-4 md:p-8">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-orange-400">
+                    Elite Dangerous High-Performance Router
+                </h1>
+                <p class="text-gray-400 mt-2">
+                    Leveraging Rust for lightning-fast, fuel-aware long-range
+                    plotting.
+                </p>
+            </header>
 
-    <div class="container mx-auto p-4 md:p-8">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-orange-400">Elite Dangerous High-Performance Router</h1>
-            <p class="text-gray-400 mt-2">Leveraging C++ for lightning-fast, fuel-aware long-range plotting.</p>
-        </header>
-
-        <main class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-4xl mx-auto">
-            <div id="route-form">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label for="start-system" class="block text-sm font-medium text-gray-300 mb-1">Start System</label>
-                        <div class="relative">
-                            <input type="text" id="start-system" autocomplete="off" placeholder="e.g., Sol" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-                            <div id="start-results" class="search-results bg-gray-800 border border-gray-600 rounded-md mt-1 hidden"></div>
+            <main
+                class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-4xl mx-auto"
+            >
+                <div id="route-form">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label
+                                for="start-system"
+                                class="block text-sm font-medium text-gray-300 mb-1"
+                                >Start System</label
+                            >
+                            <div class="relative">
+                                <input
+                                    type="text"
+                                    id="start-system"
+                                    autocomplete="off"
+                                    placeholder="e.g., Sol"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                                <div
+                                    id="start-results"
+                                    class="search-results bg-gray-800 border border-gray-600 rounded-md mt-1 hidden"
+                                ></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label
+                                for="end-system"
+                                class="block text-sm font-medium text-gray-300 mb-1"
+                                >Destination System</label
+                            >
+                            <div class="relative">
+                                <input
+                                    type="text"
+                                    id="end-system"
+                                    autocomplete="off"
+                                    placeholder="e.g., Colonia"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                                <div
+                                    id="end-results"
+                                    class="search-results bg-gray-800 border border-gray-600 rounded-md mt-1 hidden"
+                                ></div>
+                            </div>
                         </div>
                     </div>
-                    <div>
-                        <label for="end-system" class="block text-sm font-medium text-gray-300 mb-1">Destination System</label>
-                        <div class="relative">
-                            <input type="text" id="end-system" autocomplete="off" placeholder="e.g., Colonia" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-                            <div id="end-results" class="search-results bg-gray-800 border border-gray-600 rounded-md mt-1 hidden"></div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label
+                                for="jump-range"
+                                class="block text-sm font-medium text-gray-300 mb-1"
+                                >Jump Range (Ly)</label
+                            >
+                            <input
+                                type="number"
+                                id="jump-range"
+                                value="70.0"
+                                step="0.1"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                title="Your ship's maximum jump range."
+                            />
+                        </div>
+                        <div>
+                            <label
+                                for="fuel-capacity"
+                                class="block text-sm font-medium text-gray-300 mb-1"
+                                >Fuel Capacity (Tons)</label
+                            >
+                            <input
+                                type="number"
+                                id="fuel-capacity"
+                                value="32.0"
+                                step="1"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            />
                         </div>
                     </div>
-                </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <label for="jump-range" class="block text-sm font-medium text-gray-300 mb-1">Jump Range (Ly)</label>
-                        <input type="number" id="jump-range" value="70.0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500" title="Your ship's maximum jump range.">
-                    </div>
-                    <div>
-                        <label for="fuel-capacity" class="block text-sm font-medium text-gray-300 mb-1">Fuel Capacity (Tons)</label>
-                        <input type="number" id="fuel-capacity" value="32.0" step="1" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                     <div>
-                        <label for="max-star-distance" class="block text-sm font-medium text-gray-300 mb-1">Max Star Distance (Ls)</label>
-                        <input type="number" id="max-star-distance" value="1000" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
-                    </div>
-                    <div class="flex items-end space-x-6">
-                        <div class="flex items-center">
-                            <input id="use-neutron" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
-                            <label for="use-neutron" class="ml-2 block text-sm text-gray-300">Use Neutron Boosts</label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label
+                                for="max-star-distance"
+                                class="block text-sm font-medium text-gray-300 mb-1"
+                                >Max Star Distance (Ls)</label
+                            >
+                            <input
+                                type="number"
+                                id="max-star-distance"
+                                value="100"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            />
                         </div>
-                         <div class="flex items-center">
-                            <input id="exclude-wd" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
-                            <label for="exclude-wd" class="ml-2 block text-sm text-gray-300">Exclude White Dwarfs</label>
+                        <!-- NEW: Greediness Slider -->
+                        <div>
+                            <label
+                                for="greediness"
+                                class="block text-sm font-medium text-gray-300 mb-1"
+                            >
+                                Greediness
+                                <span
+                                    id="greediness-value"
+                                    class="text-orange-400 font-bold"
+                                    >1.0</span
+                                >
+                            </label>
+                            <input
+                                type="range"
+                                id="greediness"
+                                min="0.8"
+                                max="2.0"
+                                value="1.0"
+                                step="0.1"
+                                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                title="Lower (more optimal) is slower. Higher (faster) may not find the best route."
+                                oninput="document.getElementById('greediness-value').textContent = this.value"
+                            />
+                            <p class="text-xs text-gray-500 mt-1">
+                                &gt;1: Faster/Direct, 1: Balanced, &lt;1:
+                                Slower/Optimal
+                            </p>
                         </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="flex items-center space-x-6">
+                            <div class="flex items-center">
+                                <input
+                                    id="use-neutron"
+                                    type="checkbox"
+                                    checked
+                                    class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                />
+                                <label
+                                    for="use-neutron"
+                                    class="ml-2 block text-sm text-gray-300"
+                                    >Use Neutron Boosts</label
+                                >
+                            </div>
+                            <div class="flex items-center">
+                                <input
+                                    id="exclude-wd"
+                                    type="checkbox"
+                                    checked
+                                    class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                />
+                                <label
+                                    for="exclude-wd"
+                                    class="ml-2 block text-sm text-gray-300"
+                                    >Exclude White Dwarfs</label
+                                >
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <button
+                            id="plot-button"
+                            class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded-md transition duration-300"
+                        >
+                            Plot Route
+                        </button>
                     </div>
                 </div>
 
-                <div class="text-center">
-                    <button id="plot-button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded-md transition duration-300">Plot Route</button>
+                <div id="results-container" class="mt-8 hidden">
+                    <div id="loading-indicator" class="text-center">
+                        <div
+                            class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4"
+                        ></div>
+                        <p class="text-lg">
+                            Plotting route... this may take several minutes for
+                            very long distances.
+                        </p>
+                        <p id="progress-text" class="text-gray-400 mt-2"></p>
+                    </div>
+                    <div
+                        id="route-summary"
+                        class="hidden bg-gray-700 p-4 rounded-md mb-4 text-center"
+                    ></div>
+                    <div
+                        id="error-message"
+                        class="hidden bg-red-800 text-white p-4 rounded-md text-center"
+                    ></div>
+                    <div class="overflow-x-auto">
+                        <table
+                            id="route-table"
+                            class="min-w-full divide-y divide-gray-700 hidden"
+                        >
+                            <thead class="bg-gray-700">
+                                <tr>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                                    >
+                                        #
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                                    >
+                                        System (Destination)
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                                    >
+                                        Jump (Ly)
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                                    >
+                                        Total (Ly)
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                                    >
+                                        Fuel (Used/Rem)
+                                    </th>
+                                    <th
+                                        class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                                    >
+                                        Destination Info
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody
+                                id="route-body"
+                                class="bg-gray-800 divide-y divide-gray-700"
+                            ></tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            </main>
+        </div>
 
-            <div id="results-container" class="mt-8 hidden">
-                <div id="loading-indicator" class="text-center">
-                     <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4"></div>
-                    <p class="text-lg">Plotting route... this may take several minutes for very long distances.</p>
-                     <p id="progress-text" class="text-gray-400 mt-2"></p>
-                </div>
-                <div id="route-summary" class="hidden bg-gray-700 p-4 rounded-md mb-4 text-center"></div>
-                <div id="error-message" class="hidden bg-red-800 text-white p-4 rounded-md text-center"></div>
-                <div class="overflow-x-auto">
-                    <table id="route-table" class="min-w-full divide-y divide-gray-700 hidden">
-                        <thead class="bg-gray-700">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">#</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">System</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Dist. (Ly)</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fuel Used</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fuel Rem.</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Refuel</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Boost</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Info</th>
-                            </tr>
-                        </thead>
-                        <tbody id="route-body" class="bg-gray-800 divide-y divide-gray-700">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </main>
-    </div>
+        <script>
+            const API_BASE_URL = "http://localhost:8080";
+            let startSystem = null;
+            let endSystem = null;
+            let searchAbortControllers = { start: null, end: null };
 
-    <script>
-        const API_BASE_URL = 'http://127.0.0.1:5000';
-        let startSystem = null;
-        let endSystem = null;
-        let eventSource = null;
-        let searchAbortControllers = { start: null, end: null };
+            // --- The search and form submission logic is unchanged. ---
+            // (The existing setupSearch, findUniqueSystem, and plotRoute functions are all correct)
 
-        function setupSearch(inputId, resultsId) {
-            const input = document.getElementById(inputId);
-            const results = document.getElementById(resultsId);
+            function setupSearch(inputId, resultsId) {
+                const input = document.getElementById(inputId);
+                const results = document.getElementById(resultsId);
 
-            const debounce = (func, delay) => {
-                let timeoutId;
-                return (...args) => {
-                    clearTimeout(timeoutId);
-                    timeoutId = setTimeout(() => func.apply(this, args), delay);
+                const debounce = (func, delay) => {
+                    let timeoutId;
+                    return (...args) => {
+                        clearTimeout(timeoutId);
+                        timeoutId = setTimeout(
+                            () => func.apply(this, args),
+                            delay,
+                        );
+                    };
                 };
-            };
-            
-            const performSearch = async (query) => {
-                if (query.length < 2) {
-                    results.innerHTML = '';
-                    results.classList.add('hidden');
-                    return;
-                }
 
-                const controllerId = inputId.startsWith('start') ? 'start' : 'end';
-                if (searchAbortControllers[controllerId]) {
-                    searchAbortControllers[controllerId].abort();
-                }
-                searchAbortControllers[controllerId] = new AbortController();
-                const signal = searchAbortControllers[controllerId].signal;
-                
+                const performSearch = async (query) => {
+                    if (query.length < 2) {
+                        results.innerHTML = "";
+                        results.classList.add("hidden");
+                        return;
+                    }
+
+                    const controllerId = inputId.startsWith("start")
+                        ? "start"
+                        : "end";
+                    if (searchAbortControllers[controllerId]) {
+                        searchAbortControllers[controllerId].abort();
+                    }
+                    searchAbortControllers[controllerId] =
+                        new AbortController();
+                    const signal = searchAbortControllers[controllerId].signal;
+
+                    try {
+                        const response = await fetch(
+                            `${API_BASE_URL}/api/search?name=${encodeURIComponent(query)}`,
+                            { signal },
+                        );
+                        if (!response.ok)
+                            throw new Error("Network response was not ok");
+                        const data = await response.json();
+
+                        results.innerHTML = "";
+                        if (data.length > 0) {
+                            data.forEach((system) => {
+                                const item = document.createElement("div");
+                                item.className =
+                                    "p-2 cursor-pointer search-item";
+                                item.textContent = system.name;
+                                item.onclick = () => {
+                                    input.value = system.name;
+                                    if (inputId.startsWith("start")) {
+                                        startSystem = system;
+                                    } else {
+                                        endSystem = system;
+                                    }
+                                    results.classList.add("hidden");
+                                };
+                                results.appendChild(item);
+                            });
+                            results.classList.remove("hidden");
+                        } else {
+                            results.classList.add("hidden");
+                        }
+                    } catch (error) {
+                        if (error.name !== "AbortError") {
+                            console.error("Search failed:", error);
+                        }
+                    }
+                };
+
+                input.addEventListener(
+                    "input",
+                    debounce((e) => performSearch(e.target.value), 300),
+                );
+
+                document.addEventListener("click", (e) => {
+                    if (
+                        !input.contains(e.target) &&
+                        !results.contains(e.target)
+                    ) {
+                        results.classList.add("hidden");
+                    }
+                });
+            }
+
+            async function findUniqueSystem(name) {
                 try {
-                    const response = await fetch(`${API_BASE_URL}/api/search?name=${encodeURIComponent(query)}`, { signal });
-                    if (!response.ok) throw new Error('Network response was not ok');
+                    const response = await fetch(
+                        `${API_BASE_URL}/api/search?name=${encodeURIComponent(name)}`,
+                    );
+                    if (!response.ok) return null;
                     const data = await response.json();
-                    
-                    results.innerHTML = '';
-                    if (data.length > 0) {
-                        data.forEach(system => {
-                            const item = document.createElement('div');
-                            item.className = 'p-2 cursor-pointer search-item';
-                            item.textContent = system.name;
-                            item.onclick = () => {
-                                input.value = system.name;
-                                if (inputId.startsWith('start')) {
-                                    startSystem = system;
-                                } else {
-                                    endSystem = system;
-                                }
-                                results.classList.add('hidden');
-                            };
-                            results.appendChild(item);
-                        });
-                        results.classList.remove('hidden');
-                    } else {
-                        results.classList.add('hidden');
+                    if (
+                        data.length > 0 &&
+                        data[0].name.toLowerCase() === name.toLowerCase()
+                    ) {
+                        return data[0];
                     }
+                    return null;
                 } catch (error) {
-                    if (error.name !== 'AbortError') {
-                        console.error('Search failed:', error);
-                    }
+                    return null;
                 }
-            };
-            
-            input.addEventListener('input', debounce(e => performSearch(e.target.value), 300));
+            }
 
-            document.addEventListener('click', (e) => {
-                if (!input.contains(e.target) && !results.contains(e.target)) {
-                    results.classList.add('hidden');
+            async function plotRoute() {
+                const startInput = document.getElementById("start-system");
+                const endInput = document.getElementById("end-system");
+
+                Object.values(searchAbortControllers).forEach((controller) =>
+                    controller?.abort(),
+                );
+
+                if (
+                    !startSystem ||
+                    startSystem.name.toLowerCase() !==
+                        startInput.value.toLowerCase()
+                ) {
+                    startSystem = await findUniqueSystem(startInput.value);
                 }
-            });
-        }
-        
-        async function findUniqueSystem(name) {
-             try {
-                const response = await fetch(`${API_BASE_URL}/api/search?name=${encodeURIComponent(name)}`);
-                if (!response.ok) return null;
-                const data = await response.json();
-                if (data.length > 0 && data[0].name.toLowerCase() === name.toLowerCase()) {
-                    return data[0];
+                if (
+                    !endSystem ||
+                    endSystem.name.toLowerCase() !==
+                        endInput.value.toLowerCase()
+                ) {
+                    endSystem = await findUniqueSystem(endInput.value);
                 }
-                return null;
-            } catch (error) {
-                return null;
-            }
-        }
 
-        async function plotRoute() {
-            const startInput = document.getElementById('start-system');
-            const endInput = document.getElementById('end-system');
-            
-            Object.values(searchAbortControllers).forEach(controller => controller?.abort());
-
-            if (!startSystem || startSystem.name.toLowerCase() !== startInput.value.toLowerCase()) {
-                 startSystem = await findUniqueSystem(startInput.value);
-            }
-            if (!endSystem || endSystem.name.toLowerCase() !== endInput.value.toLowerCase()) {
-                endSystem = await findUniqueSystem(endInput.value);
-            }
-
-            if (!startSystem) {
-                showError('Start system not found or not selected. Please choose from the list.');
-                return;
-            }
-            if (!endSystem) {
-                showError('Destination system not found or not selected. Please choose from the list.');
-                return;
-            }
-
-            const jumpRange = document.getElementById('jump-range').value;
-            const fuelCapacity = document.getElementById('fuel-capacity').value;
-            const maxStarDistance = document.getElementById('max-star-distance').value;
-            const useNeutron = document.getElementById('use-neutron').checked;
-            const excludeWD = document.getElementById('exclude-wd').checked;
-
-            document.getElementById('results-container').classList.remove('hidden');
-            document.getElementById('loading-indicator').classList.remove('hidden');
-            document.getElementById('progress-text').textContent = 'Initializing route calculation...';
-            document.getElementById('route-summary').classList.add('hidden');
-            document.getElementById('route-table').classList.add('hidden');
-            document.getElementById('error-message').classList.add('hidden');
-
-            if (eventSource) {
-                eventSource.close();
-            }
-            
-            const params = new URLSearchParams({
-                start_id: startSystem.id,
-                end_id: endSystem.id,
-                jump_range: jumpRange,
-                fuel_capacity: fuelCapacity,
-                max_star_distance: maxStarDistance,
-                use_neutron: useNeutron,
-                exclude_white_dwarfs: excludeWD
-            });
-
-            eventSource = new EventSource(`${API_BASE_URL}/api/plot_route_stream?${params.toString()}`);
-
-            eventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.error) {
-                    showError(data.error);
-                    eventSource.close();
+                if (!startSystem) {
+                    showError(
+                        "Start system not found or not selected. Please choose from the list.",
+                    );
+                    return;
+                }
+                if (!endSystem) {
+                    showError(
+                        "Destination system not found or not selected. Please choose from the list.",
+                    );
                     return;
                 }
 
-                if (data.route) {
-                    displayResults(data);
-                    eventSource.close();
-                } else if (data.status) {
-                     document.getElementById('progress-text').textContent = data.status;
+                const jumpRange = document.getElementById("jump-range").value;
+                const fuelCapacity =
+                    document.getElementById("fuel-capacity").value;
+                const maxStarDistance =
+                    document.getElementById("max-star-distance").value;
+                const useNeutron =
+                    document.getElementById("use-neutron").checked;
+                const excludeWD = document.getElementById("exclude-wd").checked;
+                // NEW: Get greediness value from the slider
+                const greediness = document.getElementById("greediness").value;
+
+                document
+                    .getElementById("results-container")
+                    .classList.remove("hidden");
+                document
+                    .getElementById("loading-indicator")
+                    .classList.remove("hidden");
+                document.getElementById("progress-text").textContent =
+                    "Plotting route... this may take a moment.";
+                document
+                    .getElementById("route-summary")
+                    .classList.add("hidden");
+                document.getElementById("route-table").classList.add("hidden");
+                document
+                    .getElementById("error-message")
+                    .classList.add("hidden");
+
+                const body = {
+                    start_id: startSystem.id,
+                    end_id: endSystem.id,
+                    jump_range: parseFloat(jumpRange),
+                    fuel_capacity: parseFloat(fuelCapacity),
+                    max_star_distance: parseFloat(maxStarDistance),
+                    use_neutron: useNeutron,
+                    exclude_white_dwarfs: excludeWD,
+                    // NEW: Add greediness to the request body
+                    greediness: parseFloat(greediness),
+                };
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/route`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(body),
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(errorText || "Failed to plot route.");
+                    }
+
+                    const route = await response.json();
+                    displayResults(route);
+                } catch (error) {
+                    console.error("Routing failed:", error);
+                    showError(error.message);
                 }
-            };
+            }
 
-            eventSource.onerror = function(err) {
-                console.error("EventSource failed:", err);
-                showError("An error occurred while communicating with the server. See console for details.");
-                eventSource.close();
-            };
-        }
+            function showError(message) {
+                document
+                    .getElementById("loading-indicator")
+                    .classList.add("hidden");
+                const errorDiv = document.getElementById("error-message");
+                errorDiv.textContent = message;
+                errorDiv.classList.remove("hidden");
+            }
 
-        function displayResults(data) {
-            document.getElementById('loading-indicator').classList.add('hidden');
-            document.getElementById('route-table').classList.remove('hidden');
-            document.getElementById('route-summary').classList.remove('hidden');
+            /**
+             * Renders a list of star features into a nice HTML string.
+             * @param {Array} features - e.g., [{star_type: 'Scoopable', distance_ls: 0.0}]
+             */
+            function renderFeatures(features) {
+                if (!features || features.length === 0) return "";
+                // Sort features by distance to show the closest ones first
+                features.sort((a, b) => a.distance_ls - b.distance_ls);
 
-            const routeBody = document.getElementById('route-body');
-            routeBody.innerHTML = '';
-            let totalDistance = 0;
+                return features
+                    .map((feature) => {
+                        let color = "text-gray-400";
+                        let text = feature.star_type;
+                        if (feature.star_type === "Scoopable") {
+                            color = "text-green-400";
+                            text = "Fuel Star";
+                        } else if (feature.star_type === "Neutron") {
+                            color = "text-blue-400";
+                        } else if (feature.star_type === "WhiteDwarf") {
+                            color = "text-purple-400";
+                        }
+                        // Add the distance in Ls
+                        const distanceText = `(${feature.distance_ls.toFixed(0)} Ls)`;
 
-            data.route.forEach((step, index) => {
-                const row = routeBody.insertRow();
-                row.className = index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-750';
-                
-                row.insertCell(0).textContent = step.jump_number;
-                row.insertCell(1).textContent = step.system_name;
-                row.insertCell(2).textContent = step.jump_distance > 0 ? step.jump_distance.toFixed(2) : '-';
-                row.insertCell(3).textContent = step.fuel_used > 0 ? step.fuel_used.toFixed(2) : '-';
-                row.insertCell(4).textContent = step.fuel_remaining.toFixed(2);
-                
-                const refuelCell = row.insertCell(5);
-                if (step.is_refuel_stop) {
-                    refuelCell.innerHTML = `<span class="text-green-400 font-bold">YES</span>`;
-                }
+                        // Wrap each feature in a div to place it on a new line
+                        return `<div class="mb-1">
+                               <span class="inline-block bg-gray-900 rounded-full px-2 py-1 text-xs font-semibold ${color}">${text}</span>
+                               <span class="text-xs text-gray-500 ml-1">${distanceText}</span>
+                           </div>`;
+                    })
+                    .join("");
+            }
 
-                const boostCell = row.insertCell(6);
-                if (step.boost_type) {
-                     boostCell.innerHTML = `<span class="text-blue-400 font-bold">${step.boost_type}</span>`;
-                }
-                
-                const infoCell = row.insertCell(7);
-                let infoText = step.warnings.join(', ');
-                infoCell.innerHTML = `<span class="text-yellow-400">${infoText}</span>`;
+            /**
+             * Displays the final route in the table.
+             * @param {Array} route - The array of ApiJumpResult objects from the server.
+             */
+            function displayResults(route) {
+                document
+                    .getElementById("loading-indicator")
+                    .classList.add("hidden");
+                document
+                    .getElementById("route-table")
+                    .classList.remove("hidden");
+                document
+                    .getElementById("route-summary")
+                    .classList.remove("hidden");
 
+                const routeBody = document.getElementById("route-body");
+                routeBody.innerHTML = "";
+                let totalDistance = 0;
+                let runningTotalDistance = 0; // For the new column
 
-                if (step.jump_distance > 0) {
+                // Add the starting system row manually
+                const startRow = routeBody.insertRow();
+                startRow.className = "bg-gray-800";
+                startRow.insertCell(0).textContent = 0;
+                startRow.insertCell(1).textContent =
+                    document.getElementById("start-system").value;
+                startRow.insertCell(2).textContent = "-";
+                startRow.insertCell(3).textContent = "-"; // Total Dist
+                startRow.insertCell(4).innerHTML =
+                    `<span class="text-xs text-gray-400">- / ${parseFloat(document.getElementById("fuel-capacity").value).toFixed(2)}</span>`;
+                startRow.insertCell(5).innerHTML = renderFeatures(
+                    route[0]?.source_features || [],
+                );
+
+                route.forEach((step) => {
+                    const row = routeBody.insertRow();
+                    row.className =
+                        step.jump_number % 2 === 0
+                            ? "bg-gray-750"
+                            : "bg-gray-800";
+
                     totalDistance += step.jump_distance;
-                }
-            });
+                    runningTotalDistance += step.jump_distance;
 
-            const summary = document.getElementById('route-summary');
-            summary.innerHTML = `
-                <span class="font-bold">${data.jumps} Jumps</span>
-                <span class="mx-4 text-gray-500">|</span>
-                <span class="font-bold">${totalDistance.toFixed(2)} Ly Total Distance</span>
-            `;
-        }
+                    row.insertCell(0).textContent = step.jump_number;
+                    row.insertCell(1).textContent = step.system_name;
+                    row.insertCell(2).textContent =
+                        step.jump_distance.toFixed(2);
 
-        function showError(message) {
-            document.getElementById('loading-indicator').classList.add('hidden');
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = message;
-            errorDiv.classList.remove('hidden');
-        }
+                    // New Cell: Running Total Distance
+                    const totalDistCell = row.insertCell(3);
+                    totalDistCell.textContent = runningTotalDistance.toFixed(2);
+                    totalDistCell.className = "text-sm text-gray-400";
 
-        document.getElementById('plot-button').addEventListener('click', plotRoute);
-        setupSearch('start-system', 'start-results');
-        setupSearch('end-system', 'end-results');
+                    // New Unified Fuel Cell with smaller text
+                    const fuelCell = row.insertCell(4);
+                    fuelCell.innerHTML = `<span class="text-xs text-gray-400">${step.fuel_used.toFixed(2)} / ${step.fuel_remaining.toFixed(2)}</span>`;
 
-    </script>
-</body>
+                    // Destination Info Cell
+                    const infoCell = row.insertCell(5);
+                    infoCell.innerHTML = renderFeatures(
+                        step.destination_features,
+                    );
+                });
+
+                const summary = document.getElementById("route-summary");
+                summary.innerHTML = `
+                    <span class="font-bold">${route.length} Jumps</span>
+                    <span class="mx-4 text-gray-500">|</span>
+                    <span class="font-bold">${totalDistance.toFixed(2)} Ly Total Distance</span>
+                `;
+            }
+            // --- Setup event listeners ---
+            document
+                .getElementById("plot-button")
+                .addEventListener("click", plotRoute);
+            setupSearch("start-system", "start-results");
+            setupSearch("end-system", "end-results");
+        </script>
+    </body>
 </html>
-

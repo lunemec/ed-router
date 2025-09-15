@@ -1,0 +1,33 @@
+[package]
+name = "ed_router"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-web = "4"
+actix-files = "0.6"
+actix-cors = "0.7"
+log="0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rusqlite = { version = "0.33", features = ["bundled"] }
+rkyv = { version = "0.7", default-features = false, features = ["std", "validation", "size_64"] }
+rstar = "0.10"
+rayon = "1.10"
+r2d2 = "0.8"
+r2d2_sqlite = "0.26"
+num_cpus = "*"
+memmap2 = "0.9"
+env_logger = "0.10.0"
+flate2 = "1.0"
+indicatif = { version = "0.17", features = ["rayon"] }
+
+[[bin]]
+name = "cache_generator"
+path = "src/bin/cache_generator.rs"
+
+[[bin]]
+name = "import_starmap"
+path = "src/bin/import_starmap.rs"

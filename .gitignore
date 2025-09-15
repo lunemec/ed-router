@@ -6,3 +6,10 @@ build/
 *.lib
 *.db-shm
 *.db-wal
+*.rkyv
+*.json.gz
+.DS_Store
+
+# Added by cargo
+
+/target
