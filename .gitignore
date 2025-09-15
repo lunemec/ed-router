@@ -1,0 +1,8 @@
+build/
+*.cache
+*.db
+*.exe
+*.obj
+*.lib
+*.db-shm
+*.db-wal

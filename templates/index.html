@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elite Dangerous High-Performance Router</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .search-results {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .search-item:hover {
+            background-color: #4a5568;
+        }
+        .loader {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-orange-400">Elite Dangerous High-Performance Router</h1>
+            <p class="text-gray-400 mt-2">Leveraging C++ for lightning-fast, fuel-aware long-range plotting.</p>
+        </header>
+
+        <main class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-4xl mx-auto">
+            <div id="route-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label for="start-system" class="block text-sm font-medium text-gray-300 mb-1">Start System</label>
+                        <div class="relative">
+                            <input type="text" id="start-system" autocomplete="off" placeholder="e.g., Sol" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                            <div id="start-results" class="search-results bg-gray-800 border border-gray-600 rounded-md mt-1 hidden"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="end-system" class="block text-sm font-medium text-gray-300 mb-1">Destination System</label>
+                        <div class="relative">
+                            <input type="text" id="end-system" autocomplete="off" placeholder="e.g., Colonia" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                            <div id="end-results" class="search-results bg-gray-800 border border-gray-600 rounded-md mt-1 hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label for="jump-range" class="block text-sm font-medium text-gray-300 mb-1">Jump Range (Ly)</label>
+                        <input type="number" id="jump-range" value="70.0" step="0.1" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500" title="Your ship's maximum jump range.">
+                    </div>
+                    <div>
+                        <label for="fuel-capacity" class="block text-sm font-medium text-gray-300 mb-1">Fuel Capacity (Tons)</label>
+                        <input type="number" id="fuel-capacity" value="32.0" step="1" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                     <div>
+                        <label for="max-star-distance" class="block text-sm font-medium text-gray-300 mb-1">Max Star Distance (Ls)</label>
+                        <input type="number" id="max-star-distance" value="1000" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div class="flex items-end space-x-6">
+                        <div class="flex items-center">
+                            <input id="use-neutron" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <label for="use-neutron" class="ml-2 block text-sm text-gray-300">Use Neutron Boosts</label>
+                        </div>
+                         <div class="flex items-center">
+                            <input id="exclude-wd" type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <label for="exclude-wd" class="ml-2 block text-sm text-gray-300">Exclude White Dwarfs</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button id="plot-button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-6 rounded-md transition duration-300">Plot Route</button>
+                </div>
+            </div>
+
+            <div id="results-container" class="mt-8 hidden">
+                <div id="loading-indicator" class="text-center">
+                     <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4"></div>
+                    <p class="text-lg">Plotting route... this may take several minutes for very long distances.</p>
+                     <p id="progress-text" class="text-gray-400 mt-2"></p>
+                </div>
+                <div id="route-summary" class="hidden bg-gray-700 p-4 rounded-md mb-4 text-center"></div>
+                <div id="error-message" class="hidden bg-red-800 text-white p-4 rounded-md text-center"></div>
+                <div class="overflow-x-auto">
+                    <table id="route-table" class="min-w-full divide-y divide-gray-700 hidden">
+                        <thead class="bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">#</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">System</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Dist. (Ly)</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fuel Used</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fuel Rem.</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Refuel</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Boost</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Info</th>
+                            </tr>
+                        </thead>
+                        <tbody id="route-body" class="bg-gray-800 divide-y divide-gray-700">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5000';
+        let startSystem = null;
+        let endSystem = null;
+        let eventSource = null;
+        let searchAbortControllers = { start: null, end: null };
+
+        function setupSearch(inputId, resultsId) {
+            const input = document.getElementById(inputId);
+            const results = document.getElementById(resultsId);
+
+            const debounce = (func, delay) => {
+                let timeoutId;
+                return (...args) => {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(() => func.apply(this, args), delay);
+                };
+            };
+            
+            const performSearch = async (query) => {
+                if (query.length < 2) {
+                    results.innerHTML = '';
+                    results.classList.add('hidden');
+                    return;
+                }
+
+                const controllerId = inputId.startsWith('start') ? 'start' : 'end';
+                if (searchAbortControllers[controllerId]) {
+                    searchAbortControllers[controllerId].abort();
+                }
+                searchAbortControllers[controllerId] = new AbortController();
+                const signal = searchAbortControllers[controllerId].signal;
+                
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/search?name=${encodeURIComponent(query)}`, { signal });
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    const data = await response.json();
+                    
+                    results.innerHTML = '';
+                    if (data.length > 0) {
+                        data.forEach(system => {
+                            const item = document.createElement('div');
+                            item.className = 'p-2 cursor-pointer search-item';
+                            item.textContent = system.name;
+                            item.onclick = () => {
+                                input.value = system.name;
+                                if (inputId.startsWith('start')) {
+                                    startSystem = system;
+                                } else {
+                                    endSystem = system;
+                                }
+                                results.classList.add('hidden');
+                            };
+                            results.appendChild(item);
+                        });
+                        results.classList.remove('hidden');
+                    } else {
+                        results.classList.add('hidden');
+                    }
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        console.error('Search failed:', error);
+                    }
+                }
+            };
+            
+            input.addEventListener('input', debounce(e => performSearch(e.target.value), 300));
+
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !results.contains(e.target)) {
+                    results.classList.add('hidden');
+                }
+            });
+        }
+        
+        async function findUniqueSystem(name) {
+             try {
+                const response = await fetch(`${API_BASE_URL}/api/search?name=${encodeURIComponent(name)}`);
+                if (!response.ok) return null;
+                const data = await response.json();
+                if (data.length > 0 && data[0].name.toLowerCase() === name.toLowerCase()) {
+                    return data[0];
+                }
+                return null;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        async function plotRoute() {
+            const startInput = document.getElementById('start-system');
+            const endInput = document.getElementById('end-system');
+            
+            Object.values(searchAbortControllers).forEach(controller => controller?.abort());
+
+            if (!startSystem || startSystem.name.toLowerCase() !== startInput.value.toLowerCase()) {
+                 startSystem = await findUniqueSystem(startInput.value);
+            }
+            if (!endSystem || endSystem.name.toLowerCase() !== endInput.value.toLowerCase()) {
+                endSystem = await findUniqueSystem(endInput.value);
+            }
+
+            if (!startSystem) {
+                showError('Start system not found or not selected. Please choose from the list.');
+                return;
+            }
+            if (!endSystem) {
+                showError('Destination system not found or not selected. Please choose from the list.');
+                return;
+            }
+
+            const jumpRange = document.getElementById('jump-range').value;
+            const fuelCapacity = document.getElementById('fuel-capacity').value;
+            const maxStarDistance = document.getElementById('max-star-distance').value;
+            const useNeutron = document.getElementById('use-neutron').checked;
+            const excludeWD = document.getElementById('exclude-wd').checked;
+
+            document.getElementById('results-container').classList.remove('hidden');
+            document.getElementById('loading-indicator').classList.remove('hidden');
+            document.getElementById('progress-text').textContent = 'Initializing route calculation...';
+            document.getElementById('route-summary').classList.add('hidden');
+            document.getElementById('route-table').classList.add('hidden');
+            document.getElementById('error-message').classList.add('hidden');
+
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            const params = new URLSearchParams({
+                start_id: startSystem.id,
+                end_id: endSystem.id,
+                jump_range: jumpRange,
+                fuel_capacity: fuelCapacity,
+                max_star_distance: maxStarDistance,
+                use_neutron: useNeutron,
+                exclude_white_dwarfs: excludeWD
+            });
+
+            eventSource = new EventSource(`${API_BASE_URL}/api/plot_route_stream?${params.toString()}`);
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.error) {
+                    showError(data.error);
+                    eventSource.close();
+                    return;
+                }
+
+                if (data.route) {
+                    displayResults(data);
+                    eventSource.close();
+                } else if (data.status) {
+                     document.getElementById('progress-text').textContent = data.status;
+                }
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                showError("An error occurred while communicating with the server. See console for details.");
+                eventSource.close();
+            };
+        }
+
+        function displayResults(data) {
+            document.getElementById('loading-indicator').classList.add('hidden');
+            document.getElementById('route-table').classList.remove('hidden');
+            document.getElementById('route-summary').classList.remove('hidden');
+
+            const routeBody = document.getElementById('route-body');
+            routeBody.innerHTML = '';
+            let totalDistance = 0;
+
+            data.route.forEach((step, index) => {
+                const row = routeBody.insertRow();
+                row.className = index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-750';
+                
+                row.insertCell(0).textContent = step.jump_number;
+                row.insertCell(1).textContent = step.system_name;
+                row.insertCell(2).textContent = step.jump_distance > 0 ? step.jump_distance.toFixed(2) : '-';
+                row.insertCell(3).textContent = step.fuel_used > 0 ? step.fuel_used.toFixed(2) : '-';
+                row.insertCell(4).textContent = step.fuel_remaining.toFixed(2);
+                
+                const refuelCell = row.insertCell(5);
+                if (step.is_refuel_stop) {
+                    refuelCell.innerHTML = `<span class="text-green-400 font-bold">YES</span>`;
+                }
+
+                const boostCell = row.insertCell(6);
+                if (step.boost_type) {
+                     boostCell.innerHTML = `<span class="text-blue-400 font-bold">${step.boost_type}</span>`;
+                }
+                
+                const infoCell = row.insertCell(7);
+                let infoText = step.warnings.join(', ');
+                infoCell.innerHTML = `<span class="text-yellow-400">${infoText}</span>`;
+
+
+                if (step.jump_distance > 0) {
+                    totalDistance += step.jump_distance;
+                }
+            });
+
+            const summary = document.getElementById('route-summary');
+            summary.innerHTML = `
+                <span class="font-bold">${data.jumps} Jumps</span>
+                <span class="mx-4 text-gray-500">|</span>
+                <span class="font-bold">${totalDistance.toFixed(2)} Ly Total Distance</span>
+            `;
+        }
+
+        function showError(message) {
+            document.getElementById('loading-indicator').classList.add('hidden');
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        document.getElementById('plot-button').addEventListener('click', plotRoute);
+        setupSearch('start-system', 'start-results');
+        setupSearch('end-system', 'end-results');
+
+    </script>
+</body>
+</html>
+
