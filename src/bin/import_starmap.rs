@@ -247,32 +247,28 @@ fn parse_line(line: &str) -> Option<SystemToWrite> {
             }
 
             let mut stars_to_write = Vec::new();
-
-            // First, try to find the primary star using the `mainStar` flag.
             let primary_star_index = data.bodies.iter().position(|b| b.main_star);
-
-            // If no star has the flag, fall back to finding the star at 0.0 ls.
             let primary_star_index = primary_star_index.or_else(|| {
                 data.bodies
                     .iter()
                     .position(|b| b.r#type == "Star" && b.distance_to_arrival == 0.0)
             });
 
-            // Process all star bodies.
-            for (i, body) in data
-                .bodies
-                .iter()
-                .filter(|b| b.r#type == "Star")
-                .enumerate()
-            {
-                // If this star is the primary star we identified, add it with 0.0 ls distance.
-                if Some(i) == primary_star_index {
+            for (original_index, body) in data.bodies.iter().enumerate() {
+                // Only process bodies that are actually stars.
+                if body.r#type != "Star" {
+                    continue;
+                }
+
+                // Check if the current star's original index matches the one we identified as primary.
+                if Some(original_index) == primary_star_index {
+                    // If it's the primary, its distance is always 0.0.
                     stars_to_write.push(StarToWrite {
                         sub_type: body.sub_type.clone(),
                         distance_ls: 0.0,
                     });
                 } else {
-                    // Otherwise, add it as a secondary star with its given distance.
+                    // Otherwise, it's a secondary star, so use its given distance.
                     stars_to_write.push(StarToWrite {
                         sub_type: body.sub_type.clone(),
                         distance_ls: body.distance_to_arrival,
@@ -477,5 +473,87 @@ mod tests {
 
         std::fs::remove_file(&db_path)?;
         Ok(())
+    }
+
+    #[test]
+    fn test_hip_69328_primary_star_logic_bug() {
+        let json_line = r#"
+        {
+            "id64": 1316164241787,
+            "name": "HIP 69328",
+            "coords": {"x": 52.15, "y": 196.75, "z": 136.43},
+            "bodies": [
+                {
+                  "id64": 36030113183205750,
+                  "bodyId": 1,
+                  "name": "HIP 69328 barycentre 1",
+                  "type": "Barycentre"
+                },
+                {
+                  "id64": 72058910202169730,
+                  "bodyId": 2,
+                  "name": "HIP 69328 barycentre 2",
+                  "type": "Barycentre"
+                },
+                {
+                  "id64": 108087707221133700,
+                  "bodyId": 3,
+                  "name": "HIP 69328 A",
+                  "type": "Star",
+                  "subType": "F (White) Star",
+                  "distanceToArrival": 0,
+                  "mainStar": true
+                },
+                {
+                  "id64": 144116504240097660,
+                  "bodyId": 4,
+                  "name": "HIP 69328 B",
+                  "type": "Star",
+                  "subType": "Neutron Star",
+                  "distanceToArrival": 4.449723
+                },
+                {
+                  "id64": 180145301259061630,
+                  "bodyId": 5,
+                  "name": "HIP 69328 C",
+                  "type": "Star",
+                  "subType": "White Dwarf (DA) Star",
+                  "distanceToArrival": 144.609797
+                },
+                {
+                  "id64": 216174098278025600,
+                  "bodyId": 6,
+                  "name": "HIP 69328 D",
+                  "type": "Star",
+                  "subType": "Neutron Star",
+                  "distanceToArrival": 184390.621748
+                }
+            ]
+        }"#;
+
+        let result = parse_line(json_line).expect("Parsing should succeed");
+
+        assert_eq!(result.stars.len(), 4, "Should find four stars");
+
+        let primary_star = result
+            .stars
+            .iter()
+            .find(|s| s.sub_type == Some("F (White) Star".to_string()))
+            .expect("Primary F star should be present");
+
+        let secondary_wd = result
+            .stars
+            .iter()
+            .find(|s| s.sub_type == Some("White Dwarf (DA) Star".to_string()))
+            .expect("Secondary White Dwarf should be present");
+
+        assert_eq!(
+            primary_star.distance_ls, 0.0,
+            "The F star is the correct primary and should have 0.0 ls distance."
+        );
+        assert_eq!(
+            secondary_wd.distance_ls, 144.609797,
+            "BUG: The White Dwarf's distance was incorrectly overwritten to 0.0. It should be 144.6."
+        );
     }
 }
