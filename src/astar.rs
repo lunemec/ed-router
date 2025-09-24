@@ -1,4 +1,5 @@
 use crate::cache::{SystemPoint, SystemPointExt};
+use crate::fsd::{calculate_fuel_for_jump, BoostType, FsdSpec, FSD_EXPONENTS, FSD_MULTIPLIERS};
 use rayon::prelude::*;
 use rkyv::{Archived, Deserialize, Infallible};
 use rstar::RTree;
@@ -31,7 +32,7 @@ impl<'a> NodeCache<'a> {
 
 // --- Public API ---
 
-#[derive(Debug, Clone, SerdeDeserialize)]
+#[derive(Default, Debug, Clone, SerdeDeserialize)]
 pub struct SearchParameters {
     pub start_idx: usize,
     pub end_idx: usize,
@@ -41,6 +42,17 @@ pub struct SearchParameters {
     pub exclude_white_dwarfs: bool,
     pub max_star_distance: f64,
     pub greediness: f64,
+    pub fsd_spec_request: Option<FsdSpecRequest>,
+}
+
+#[derive(Debug, Clone, SerdeDeserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FsdSpecRequest {
+    pub ship_mass: f64,
+    pub fsd_max_fuel_per_jump: f64,
+    pub fsd_drive: String,
+    pub fsd_optimal_mass: f64,
+    pub guardian_booster_size: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,12 +67,35 @@ pub struct JumpResult {
     pub warnings: Vec<String>,
 }
 
+// Creates the final FsdSpec from the user's request, looking up constants.
+fn create_fsd_spec(params: &SearchParameters) -> Option<FsdSpec> {
+    params.fsd_spec_request.as_ref().and_then(|req| {
+        // Parse the drive string like "6A" into class and rating
+        let mut chars = req.fsd_drive.chars();
+        let class = chars.next()?.to_digit(10)? as u8;
+        let rating = chars.next()?;
+
+        let multiplier = FSD_MULTIPLIERS.get(&rating)?;
+        let exponent = FSD_EXPONENTS.get(&class)?;
+
+        Some(FsdSpec {
+            ship_mass: req.ship_mass,
+            fsd_optimal_mass: req.fsd_optimal_mass,
+            fsd_max_fuel_per_jump: req.fsd_max_fuel_per_jump,
+            fsd_multiplier: *multiplier,
+            fsd_exponent: *exponent,
+            guardian_booster_size: req.guardian_booster_size,
+        })
+    })
+}
+
 /// The main entry point for running a bi-directional A* search.
 pub fn find_route(
     params: &SearchParameters,
     rtree: &RTree<SystemPoint>,
     points: &[Archived<SystemPoint>], // And the slice of all points
 ) -> Option<Vec<JumpResult>> {
+    let fsd_spec = create_fsd_spec(params);
     let start_idx = params.start_idx;
     let goal_idx = params.end_idx;
 
@@ -79,22 +114,22 @@ pub fn find_route(
     let start_h = heuristic(&start_node, &goal_node) / params.jump_range;
     open_set.push(State {
         cost: 0.0,
-        position_idx: start_idx,
+        position: start_node,
         fuel: params.fuel_capacity,
         f_score: start_h * params.greediness,
     });
 
     while let Some(State {
         cost: current_g,
-        position_idx: current_idx,
+        position: current_system,
         ..
     }) = open_set.pop()
     {
         // --- GOAL CHECK ---
         // If we've reached the end, reconstruct the path and return.
-        if current_idx == goal_node.idx {
+        if current_system.idx == goal_node.idx {
             return Some(reconstruct_path(
-                current_idx,
+                current_system.idx,
                 &came_from,
                 start_idx,
                 params.fuel_capacity,
@@ -102,13 +137,12 @@ pub fn find_route(
             ));
         }
 
-        let current_system: SystemPoint = node_cache.get(current_idx);
         let (is_scoopable_here, best_boost_here) = analyze_system_features(&current_system, params);
 
         let fuel_after_scoop = if is_scoopable_here {
             params.fuel_capacity
         } else {
-            *fuel_at_node.get(&current_idx).unwrap_or(&0.0)
+            *fuel_at_node.get(&current_system.idx).unwrap_or(&0.0)
         };
 
         let neighbor_results = expand_neighbors(
@@ -117,21 +151,23 @@ pub fn find_route(
             fuel_after_scoop,
             best_boost_here,
             params,
+            &fsd_spec,
             rtree,
             &goal_node,
         );
 
         // The final loop is now much simpler.
-        for (neighbor_idx, tentative_g_score, fuel_after_jump, f_score, details) in neighbor_results
+        for (neighbor_system, tentative_g_score, fuel_after_jump, f_score, details) in
+            neighbor_results
         {
-            if tentative_g_score < *g_score.get(&neighbor_idx).unwrap_or(&f64::INFINITY) {
-                came_from.insert(neighbor_idx, (current_idx, details));
-                g_score.insert(neighbor_idx, tentative_g_score);
-                fuel_at_node.insert(neighbor_idx, fuel_after_jump);
+            if tentative_g_score < *g_score.get(&neighbor_system.idx).unwrap_or(&f64::INFINITY) {
+                came_from.insert(neighbor_system.idx, (current_system.idx, details));
+                g_score.insert(neighbor_system.idx, tentative_g_score);
+                fuel_at_node.insert(neighbor_system.idx, fuel_after_jump);
 
                 open_set.push(State {
                     cost: tentative_g_score,
-                    position_idx: neighbor_idx,
+                    position: neighbor_system,
                     fuel: fuel_after_jump,
                     f_score, // Use the pre-calculated f_score
                 });
@@ -149,9 +185,10 @@ fn expand_neighbors(
     fuel_after_scoop: f64,
     best_boost_here: BoostType,
     params: &SearchParameters,
+    fsd_spec: &Option<FsdSpec>,
     rtree: &RTree<SystemPoint>,
     goal_node: &SystemPoint,
-) -> Vec<(usize, f64, f64, f64, JumpDetails)> {
+) -> Vec<(SystemPoint, f64, f64, f64, JumpDetails)> {
     let mut possible_jumps = vec![(params.jump_range, BoostType::None)];
     if params.use_neutron {
         match best_boost_here {
@@ -180,6 +217,7 @@ fn expand_neighbors(
                     jump_range,
                     boost_type,
                     params,
+                    fsd_spec,
                     rtree,
                     goal_node,
                 )
@@ -200,9 +238,10 @@ fn evaluate_neighbor(
     jump_range: f64,
     boost_type: BoostType,
     params: &SearchParameters,
+    fsd_spec: &Option<FsdSpec>,
     rtree: &RTree<SystemPoint>,
     goal_node: &SystemPoint,
-) -> Option<(usize, f64, f64, f64, JumpDetails)> {
+) -> Option<(SystemPoint, f64, f64, f64, JumpDetails)> {
     let neighbor_idx = neighbor_system.idx;
     if neighbor_idx == current_system.idx {
         return None;
@@ -214,7 +253,7 @@ fn evaluate_neighbor(
     }
 
     // --- Fuel Logic ---
-    let fuel_used = calculate_fuel_for_jump(jump_dist, params.jump_range);
+    let fuel_used = calculate_fuel_for_jump(jump_dist, boost_type, params.jump_range, fsd_spec);
     let fuel_after_jump = fuel_after_scoop - fuel_used;
     if fuel_after_jump < 0.0 {
         return None;
@@ -225,7 +264,8 @@ fn evaluate_neighbor(
             .find(|p| is_system_scoopable(p, params));
         if let Some(escape_route_star) = closest_scoopable {
             let escape_dist = heuristic(neighbor_system, escape_route_star);
-            let escape_fuel_cost = calculate_fuel_for_jump(escape_dist, params.jump_range);
+            let escape_fuel_cost =
+                calculate_fuel_for_jump(escape_dist, boost_type, params.jump_range, fsd_spec);
             if fuel_after_jump < escape_fuel_cost {
                 return None;
             }
@@ -269,7 +309,7 @@ fn evaluate_neighbor(
     };
 
     Some((
-        neighbor_idx,
+        neighbor_system.clone(),
         tentative_g_score,
         fuel_after_jump,
         f_score,
@@ -337,13 +377,6 @@ fn reconstruct_path(
 
 // --- Internal Structs and Enums ---
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, SerdeDeserialize)]
-pub enum BoostType {
-    None,
-    WhiteDwarf,
-    Neutron,
-}
-
 /// Represents a single jump in the path, stored in the `came_from` map.
 #[derive(Clone, Debug)]
 struct JumpDetails {
@@ -358,7 +391,7 @@ struct JumpDetails {
 #[derive(PartialEq)]
 struct State {
     cost: f64,
-    position_idx: usize,
+    position: SystemPoint,
     fuel: f64,
     f_score: f64,
 }
@@ -442,20 +475,10 @@ fn heuristic(a: &SystemPoint, b: &SystemPoint) -> f64 {
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
-fn calculate_fuel_for_jump(jump_dist: f64, max_jump_range: f64) -> f64 {
-    if max_jump_range <= 0.0 {
-        return 0.0;
-    }
-    const EXPONENT: f64 = 2.2;
-    const MAX_FUEL_PER_JUMP: f64 = 8.0;
-    let fuel_cost = MAX_FUEL_PER_JUMP * (jump_dist / max_jump_range).powf(EXPONENT);
-    fuel_cost.min(MAX_FUEL_PER_JUMP)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cache::{FullCacheData, SecondaryStar, StarFlags}; // Add this use statement
+    use crate::cache::{FullCacheData, SecondaryStar, StarFlags};
 
     fn create_test_system(id: i64, x: f64, y: f64, z: f64, flags: u8) -> SystemPoint {
         SystemPoint {
@@ -515,6 +538,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -551,6 +575,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         // A normal jump can go 55. A neutron boost can go 55 * 4 = 220.
@@ -599,6 +624,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -654,6 +680,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -669,15 +696,6 @@ mod tests {
             "Path should use neutron boosts to reduce total number of jumps"
         );
         assert_eq!(path.len(), 8);
-    }
-
-    #[test]
-    fn test_fuel_required() {
-        let fuel_required = calculate_fuel_for_jump(35.5, 50.0);
-        assert_eq!(
-            3.7658095648305974, fuel_required,
-            "we should need this much fuel"
-        );
     }
 
     #[test]
@@ -703,6 +721,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -755,6 +774,7 @@ mod tests {
             exclude_white_dwarfs: false, // CRUCIAL: We must allow white dwarfs
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -808,6 +828,7 @@ mod tests {
             exclude_white_dwarfs: false, // Must allow both boost types
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -870,6 +891,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -925,6 +947,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 0.0, // The critical edge case condition
             greediness: 1.0,
+            ..Default::default()
         };
 
         let result = find_route_for_test(&params, points);
@@ -975,6 +998,7 @@ mod tests {
             exclude_white_dwarfs: true,
             max_star_distance: 1000.0,
             greediness: 1.0,
+            ..Default::default()
         };
 
         // --- THE LOGIC OF THE TRAP ---

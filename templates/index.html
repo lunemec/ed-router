@@ -47,6 +47,7 @@
                 class="bg-gray-800 p-6 rounded-lg shadow-xl max-w-4xl mx-auto"
             >
                 <div id="route-form">
+                    <!-- Start/End Systems -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div>
                             <label
@@ -90,12 +91,13 @@
                         </div>
                     </div>
 
+                    <!-- Basic Ship Parameters -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div>
                             <label
                                 for="jump-range"
                                 class="block text-sm font-medium text-gray-300 mb-1"
-                                >Jump Range (Ly)</label
+                                >Total Jump Range (Ly)</label
                             >
                             <input
                                 type="number"
@@ -103,7 +105,7 @@
                                 value="70.0"
                                 step="0.1"
                                 class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                title="Your ship's maximum jump range."
+                                title="Your ship's maximum jump range as shown in-game (with the booster equipped)."
                             />
                         </div>
                         <div>
@@ -122,6 +124,7 @@
                         </div>
                     </div>
 
+                    <!-- Plotting Options -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div>
                             <label
@@ -136,13 +139,12 @@
                                 class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                             />
                         </div>
-                        <!-- NEW: Greediness Slider -->
                         <div>
                             <label
                                 for="greediness"
                                 class="block text-sm font-medium text-gray-300 mb-1"
                             >
-                                Greediness
+                                Plotting Greediness
                                 <span
                                     id="greediness-value"
                                     class="text-orange-400 font-bold"
@@ -161,14 +163,15 @@
                                 oninput="document.getElementById('greediness-value').textContent = this.value"
                             />
                             <p class="text-xs text-gray-500 mt-1">
-                                &gt;1: Faster/Direct, 1: Balanced, &lt;1:
-                                Slower/Optimal
+                                &lt;1: More optimal, slower. 1: Balanced. &gt;1:
+                                Faster, less optimal.
                             </p>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div class="flex items-center space-x-6">
+                    <!-- Boosts and Advanced Toggle -->
+                    <div class="mb-6">
+                        <div class="flex items-center space-x-6 mb-4">
                             <div class="flex items-center">
                                 <input
                                     id="use-neutron"
@@ -194,6 +197,102 @@
                                     class="ml-2 block text-sm text-gray-300"
                                     >Exclude White Dwarfs</label
                                 >
+                            </div>
+                        </div>
+                        <div class="flex items-center">
+                            <input
+                                id="advanced-fuel-toggle"
+                                type="checkbox"
+                                class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                            />
+                            <label
+                                for="advanced-fuel-toggle"
+                                class="ml-2 block text-sm text-gray-300"
+                                >Use Advanced Fuel Settings (more
+                                precise)</label
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Advanced Fuel Settings Section -->
+                    <div
+                        id="advanced-fuel-settings"
+                        class="hidden bg-gray-700/50 p-4 rounded-md mb-6 border border-gray-600"
+                    >
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label
+                                    for="ship-mass"
+                                    class="block text-sm font-medium text-gray-300 mb-1"
+                                    >Ship Total Mass (T)</label
+                                >
+                                <input
+                                    type="number"
+                                    id="ship-mass"
+                                    value="350"
+                                    step="0.1"
+                                    class="w-full bg-gray-600 border border-gray-500 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    for="fsd-max-fuel-per-jump"
+                                    class="block text-sm font-medium text-gray-300 mb-1"
+                                    >FSD Max Fuel per Jump (T)</label
+                                >
+                                <input
+                                    type="number"
+                                    id="fsd-max-fuel-per-jump"
+                                    value="5.0"
+                                    step="0.1"
+                                    class="w-full bg-gray-600 border border-gray-500 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    for="fsd-drive"
+                                    class="block text-sm font-medium text-gray-300 mb-1"
+                                    >FSD Module</label
+                                >
+                                <select
+                                    id="fsd-drive"
+                                    class="w-full bg-gray-600 border border-gray-500 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                >
+                                    <!-- Options will be generated by JS -->
+                                </select>
+                            </div>
+                            <div>
+                                <label
+                                    for="fsd-optimal-mass"
+                                    class="block text-sm font-medium text-gray-300 mb-1"
+                                    >FSD Optimal Mass (T)</label
+                                >
+                                <input
+                                    type="number"
+                                    id="fsd-optimal-mass"
+                                    value="900"
+                                    step="1"
+                                    class="w-full bg-gray-600 border border-gray-500 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    title="Enter the optimal mass for your stock or engineered FSD."
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    for="guardian-booster"
+                                    class="block text-sm font-medium text-gray-300 mb-1"
+                                    >Guardian FSD Booster</label
+                                >
+                                <select
+                                    id="guardian-booster"
+                                    class="w-full bg-gray-600 border border-gray-500 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                >
+                                    <option value="0">None</option>
+                                    <option value="1">1H (+4.00 Ly)</option>
+                                    <option value="2">2H (+6.00 Ly)</option>
+                                    <option value="3">3H (+7.75 Ly)</option>
+                                    <option value="4">4H (+9.25 Ly)</option>
+                                    <option value="5">5H (+10.50 Ly)</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -453,16 +552,46 @@
                     .classList.add("hidden");
 
                 const body = {
-                    start_id: startSystem.id,
-                    end_id: endSystem.id,
-                    jump_range: parseFloat(jumpRange),
-                    fuel_capacity: parseFloat(fuelCapacity),
-                    max_star_distance: parseFloat(maxStarDistance),
-                    use_neutron: useNeutron,
-                    exclude_white_dwarfs: excludeWD,
-                    // NEW: Add greediness to the request body
-                    greediness: parseFloat(greediness),
+                    startId: startSystem.id,
+                    endId: endSystem.id,
+                    jumpRange: parseFloat(
+                        document.getElementById("jump-range").value,
+                    ),
+                    fuelCapacity: parseFloat(
+                        document.getElementById("fuel-capacity").value,
+                    ),
+                    maxStarDistance: parseFloat(
+                        document.getElementById("max-star-distance").value,
+                    ),
+                    useNeutron: document.getElementById("use-neutron").checked,
+                    excludeWhiteDwarfs:
+                        document.getElementById("exclude-wd").checked,
+                    greediness: parseFloat(
+                        document.getElementById("greediness").value,
+                    ),
+                    fsdSpecRequest: null,
                 };
+                if (document.getElementById("advanced-fuel-toggle").checked) {
+                    const guardianBoosterSize =
+                        document.getElementById("guardian-booster").value;
+                    body.fsdSpecRequest = {
+                        shipMass: parseFloat(
+                            document.getElementById("ship-mass").value,
+                        ),
+                        fsdMaxFuelPerJump: parseFloat(
+                            document.getElementById("fsd-max-fuel-per-jump")
+                                .value,
+                        ),
+                        fsdDrive: document.getElementById("fsd-drive").value,
+                        fsdOptimalMass: parseFloat(
+                            document.getElementById("fsd-optimal-mass").value,
+                        ),
+                        guardianBoosterSize:
+                            guardianBoosterSize === "0"
+                                ? null
+                                : parseInt(guardianBoosterSize, 10),
+                    };
+                }
 
                 try {
                     const response = await fetch(`${API_BASE_URL}/api/route`, {
@@ -600,10 +729,37 @@
                     <span class="font-bold">${totalDistance.toFixed(2)} Ly Total Distance</span>
                 `;
             }
+            // Function to populate the FSD dropdown
+            function populateFsdDropdown() {
+                const select = document.getElementById("fsd-drive");
+                const classes = [2, 3, 4, 5, 6, 7, 8]; // Added class 8
+                const ratings = ["A", "B", "C", "D", "E"];
+
+                classes.forEach((cls) => {
+                    ratings.forEach((rating) => {
+                        const option = document.createElement("option");
+                        const value = `${cls}${rating}`;
+                        option.value = value;
+                        option.textContent = value;
+                        if (value === "5A") {
+                            option.selected = true; // Set a sensible default
+                        }
+                        select.appendChild(option);
+                    });
+                });
+            }
             // --- Setup event listeners ---
+            document.addEventListener("DOMContentLoaded", populateFsdDropdown);
             document
                 .getElementById("plot-button")
                 .addEventListener("click", plotRoute);
+            document
+                .getElementById("advanced-fuel-toggle")
+                .addEventListener("change", (e) => {
+                    document
+                        .getElementById("advanced-fuel-settings")
+                        .classList.toggle("hidden", !e.target.checked);
+                });
             setupSearch("start-system", "start-results");
             setupSearch("end-system", "end-results");
         </script>

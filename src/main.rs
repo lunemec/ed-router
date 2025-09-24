@@ -1,7 +1,8 @@
 use actix_cors::Cors;
 use actix_files::NamedFile;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use ed_router::astar::{self, SearchParameters};
+use ed_router::astar::{self, FsdSpecRequest, SearchParameters};
+use ed_router::fsd::BoostType;
 use log;
 use rkyv::{Archived, Deserialize, Infallible};
 use rstar::RTree;
@@ -32,7 +33,7 @@ struct ApiJumpResult {
     jump_distance: f64,
     fuel_used: f64,
     fuel_remaining: f64,
-    boost_type: ed_router::astar::BoostType,
+    boost_type: BoostType,
     source_features: Vec<StarFeature>,
     destination_features: Vec<StarFeature>,
     warnings: Vec<String>,
@@ -160,6 +161,7 @@ async fn search_systems(
 }
 
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RouteRequest {
     pub start_id: i64,
     pub end_id: i64,
@@ -169,6 +171,7 @@ pub struct RouteRequest {
     pub exclude_white_dwarfs: bool,
     pub max_star_distance: f64,
     pub greediness: f64,
+    pub fsd_spec_request: Option<FsdSpecRequest>,
 }
 
 #[post("/api/route")]
@@ -200,6 +203,7 @@ async fn route_systems(
             exclude_white_dwarfs: request_params.exclude_white_dwarfs,
             max_star_distance: request_params.max_star_distance,
             greediness: request_params.greediness,
+            fsd_spec_request: request_params.fsd_spec_request,
         };
 
         let path = match astar::find_route(&search_params, &app_data.rtree, app_data.points) {
