@@ -1,8 +1,8 @@
 use actix_cors::Cors;
 use actix_files::NamedFile;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use ed_router::astar::{self, FsdSpecRequest, SearchParameters};
-use ed_router::fsd::BoostType;
+use ed_router::astar::{self, SearchParameters};
+use ed_router::fsd::{BoostType, FsdSpecRequest};
 use log;
 use rkyv::{Archived, Deserialize, Infallible};
 use rstar::RTree;

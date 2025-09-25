@@ -1,5 +1,5 @@
 use crate::cache::{SystemPoint, SystemPointExt};
-use crate::fsd::{calculate_fuel_for_jump, BoostType, FsdSpec, FSD_EXPONENTS, FSD_MULTIPLIERS};
+use crate::fsd::{calculate_fuel_for_jump, BoostType, FsdSpec, FsdSpecRequest};
 use rayon::prelude::*;
 use rkyv::{Archived, Deserialize, Infallible};
 use rstar::RTree;
@@ -45,16 +45,6 @@ pub struct SearchParameters {
     pub fsd_spec_request: Option<FsdSpecRequest>,
 }
 
-#[derive(Debug, Clone, SerdeDeserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct FsdSpecRequest {
-    pub ship_mass: f64,
-    pub fsd_max_fuel_per_jump: f64,
-    pub fsd_drive: String,
-    pub fsd_optimal_mass: f64,
-    pub guardian_booster_size: Option<u8>,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct JumpResult {
     pub system_id: i64,
@@ -67,35 +57,18 @@ pub struct JumpResult {
     pub warnings: Vec<String>,
 }
 
-// Creates the final FsdSpec from the user's request, looking up constants.
-fn create_fsd_spec(params: &SearchParameters) -> Option<FsdSpec> {
-    params.fsd_spec_request.as_ref().and_then(|req| {
-        // Parse the drive string like "6A" into class and rating
-        let mut chars = req.fsd_drive.chars();
-        let class = chars.next()?.to_digit(10)? as u8;
-        let rating = chars.next()?;
-
-        let multiplier = FSD_MULTIPLIERS.get(&rating)?;
-        let exponent = FSD_EXPONENTS.get(&class)?;
-
-        Some(FsdSpec {
-            ship_mass: req.ship_mass,
-            fsd_optimal_mass: req.fsd_optimal_mass,
-            fsd_max_fuel_per_jump: req.fsd_max_fuel_per_jump,
-            fsd_multiplier: *multiplier,
-            fsd_exponent: *exponent,
-            guardian_booster_size: req.guardian_booster_size,
-        })
-    })
-}
-
 /// The main entry point for running a bi-directional A* search.
 pub fn find_route(
     params: &SearchParameters,
     rtree: &RTree<SystemPoint>,
     points: &[Archived<SystemPoint>], // And the slice of all points
 ) -> Option<Vec<JumpResult>> {
-    let fsd_spec = create_fsd_spec(params);
+    let fsd_spec = {
+        match params.fsd_spec_request.as_ref() {
+            Some(spec) => Some(FsdSpec::new(&spec)),
+            None => None,
+        }
+    };
     let start_idx = params.start_idx;
     let goal_idx = params.end_idx;
 
@@ -114,22 +87,22 @@ pub fn find_route(
     let start_h = heuristic(&start_node, &goal_node) / params.jump_range;
     open_set.push(State {
         cost: 0.0,
-        position: start_node,
+        position_idx: start_idx,
         fuel: params.fuel_capacity,
         f_score: start_h * params.greediness,
     });
 
     while let Some(State {
         cost: current_g,
-        position: current_system,
+        position_idx: current_idx,
         ..
     }) = open_set.pop()
     {
         // --- GOAL CHECK ---
         // If we've reached the end, reconstruct the path and return.
-        if current_system.idx == goal_node.idx {
+        if current_idx == goal_node.idx {
             return Some(reconstruct_path(
-                current_system.idx,
+                current_idx,
                 &came_from,
                 start_idx,
                 params.fuel_capacity,
@@ -137,12 +110,13 @@ pub fn find_route(
             ));
         }
 
+        let current_system: SystemPoint = node_cache.get(current_idx);
         let (is_scoopable_here, best_boost_here) = analyze_system_features(&current_system, params);
 
         let fuel_after_scoop = if is_scoopable_here {
             params.fuel_capacity
         } else {
-            *fuel_at_node.get(&current_system.idx).unwrap_or(&0.0)
+            *fuel_at_node.get(&current_idx).unwrap_or(&0.0)
         };
 
         let neighbor_results = expand_neighbors(
@@ -157,17 +131,16 @@ pub fn find_route(
         );
 
         // The final loop is now much simpler.
-        for (neighbor_system, tentative_g_score, fuel_after_jump, f_score, details) in
-            neighbor_results
+        for (neighbor_idx, tentative_g_score, fuel_after_jump, f_score, details) in neighbor_results
         {
-            if tentative_g_score < *g_score.get(&neighbor_system.idx).unwrap_or(&f64::INFINITY) {
-                came_from.insert(neighbor_system.idx, (current_system.idx, details));
-                g_score.insert(neighbor_system.idx, tentative_g_score);
-                fuel_at_node.insert(neighbor_system.idx, fuel_after_jump);
+            if tentative_g_score < *g_score.get(&neighbor_idx).unwrap_or(&f64::INFINITY) {
+                came_from.insert(neighbor_idx, (current_idx, details));
+                g_score.insert(neighbor_idx, tentative_g_score);
+                fuel_at_node.insert(neighbor_idx, fuel_after_jump);
 
                 open_set.push(State {
                     cost: tentative_g_score,
-                    position: neighbor_system,
+                    position_idx: neighbor_idx,
                     fuel: fuel_after_jump,
                     f_score, // Use the pre-calculated f_score
                 });
@@ -188,7 +161,7 @@ fn expand_neighbors(
     fsd_spec: &Option<FsdSpec>,
     rtree: &RTree<SystemPoint>,
     goal_node: &SystemPoint,
-) -> Vec<(SystemPoint, f64, f64, f64, JumpDetails)> {
+) -> Vec<(usize, f64, f64, f64, JumpDetails)> {
     let mut possible_jumps = vec![(params.jump_range, BoostType::None)];
     if params.use_neutron {
         match best_boost_here {
@@ -241,7 +214,7 @@ fn evaluate_neighbor(
     fsd_spec: &Option<FsdSpec>,
     rtree: &RTree<SystemPoint>,
     goal_node: &SystemPoint,
-) -> Option<(SystemPoint, f64, f64, f64, JumpDetails)> {
+) -> Option<(usize, f64, f64, f64, JumpDetails)> {
     let neighbor_idx = neighbor_system.idx;
     if neighbor_idx == current_system.idx {
         return None;
@@ -309,7 +282,7 @@ fn evaluate_neighbor(
     };
 
     Some((
-        neighbor_system.clone(),
+        neighbor_idx,
         tentative_g_score,
         fuel_after_jump,
         f_score,
@@ -391,7 +364,7 @@ struct JumpDetails {
 #[derive(PartialEq)]
 struct State {
     cost: f64,
-    position: SystemPoint,
+    position_idx: usize,
     fuel: f64,
     f_score: f64,
 }

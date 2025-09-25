@@ -732,8 +732,19 @@
             // Function to populate the FSD dropdown
             function populateFsdDropdown() {
                 const select = document.getElementById("fsd-drive");
-                const classes = [2, 3, 4, 5, 6, 7, 8]; // Added class 8
-                const ratings = ["A", "B", "C", "D", "E"];
+                const classes = [2, 3, 4, 5, 6, 7, 8];
+                const ratings = [
+                    "A",
+                    "B",
+                    "C",
+                    "D",
+                    "E",
+                    "A (SCO)",
+                    "B (SCO)",
+                    "C (SCO)",
+                    "D (SCO)",
+                    "E (SCO)",
+                ];
 
                 classes.forEach((cls) => {
                     ratings.forEach((rating) => {
